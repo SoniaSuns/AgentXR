@@ -1,0 +1,51 @@
+{
+  "id": "00f86aad47eb0a3fd75c4e9f",
+  "status": "error",
+  "started_at": 1794104989.399992,
+  "events": [
+    {
+      "time": 0.0,
+      "event": "capture.accepted"
+    },
+    {
+      "time": 0.0,
+      "event": "codex.started"
+    },
+    {
+      "time": 2.46,
+      "event": "thread.started"
+    },
+    {
+      "time": 2.47,
+      "event": "turn.started"
+    },
+    {
+      "time": 48.66,
+      "event": "error"
+    },
+    {
+      "time": 64.07,
+      "event": "error"
+    },
+    {
+      "time": 79.97,
+      "event": "error"
+    },
+    {
+      "time": 96.49,
+      "event": "error"
+    },
+    {
+      "time": 120.04,
+      "event": "request.failed"
+    }
+  ],
+  "metrics": {
+    "image_bytes": 4047,
+    "model": "Codex 内置默认模型",
+    "latency_ms": 120020
+  },
+  "error_detail": "Reconnecting... 5/5 (request timed out)",
+  "timed_out": true,
+  "error": "Codex 超时（120s），请检查网络或换用更快模型"
+}

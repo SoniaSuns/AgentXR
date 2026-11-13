@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AgentXR · 视觉引导工作台</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><a class="brand" href="/"><span class="brand-icon">⌖</span> Agent<span>XR</span><small>视觉引导工作台</small></a><div class="header-right"><button id="open-drawer" class="text-button">☰ 会话与记忆</button><span class="badge" id="connection">连接中</span><span class="local">LOCAL WORKSPACE</span></div></header>
+
+<!-- Fixed task overview: goal, plan and current step, always visible -->
+<div id="hud" class="hud" role="region" aria-label="任务总览">
+ <div class="hud-head"><strong>任务总览</strong><span id="hud-lanes" class="hud-lanes">待机</span><button id="hud-toggle" class="text-button" aria-expanded="true">收起</button></div>
+ <div id="hud-progress-strip" class="hud-progress-strip" hidden><div id="hud-progress-fill"></div></div>
+ <div id="hud-body" class="hud-body">
+  <div class="hud-goal"><small id="hud-goal-source">目标</small><strong id="hud-goal">等待观察</strong><span id="hud-goal-confidence"></span></div>
+  <div class="hud-current"><small id="hud-step-label">当前步骤</small><strong id="hud-step">—</strong><div class="hud-progress"><div id="hud-progress-bar"></div></div></div>
+  <ol id="hud-steps"></ol>
+  <div class="hud-guide"><p id="hud-observation" class="hud-observation" hidden></p><span id="hud-mode" class="badge">下一步</span><strong id="hud-title">让操作区域完整入镜</strong><p id="hud-instruction"></p><small id="hud-check"></small><small id="hud-meta" class="hud-meta"></small></div>
+  <div id="hud-ask" class="hud-ask" hidden role="group" aria-label="需要你回答的问题">
+   <div class="ask-head"><span id="ask-badge" class="badge mode-confirm">需要你确认</span><strong id="ask-text"></strong></div>
+   <div id="ask-options" class="ask-options"></div>
+   <form id="ask-form" class="ask-form"><input id="ask-input" maxlength="500" placeholder="或直接输入你的回答" aria-label="输入回答"><button type="submit">回复</button></form>
+   <div class="ask-foot"><small id="ask-reason"></small><button id="ask-dismiss" type="button" class="text-button">你来判断，这类别再问</button></div>
+  </div>
+  <div id="hud-assume" class="hud-assume" hidden><span id="assume-text"></span><span id="assume-options" class="ask-options"></span></div>
+  <div class="hud-feedback" role="group" aria-label="对当前指引的反馈">
+   <button type="button" id="fb-done" data-reaction="done">✓ 做完了</button><button type="button" id="fb-stuck" data-reaction="stuck">✗ 做不到</button><button type="button" id="fb-wrong" data-reaction="wrong">⚠ 指引不对</button><button type="button" id="feedback-note-toggle">✎ 说点什么</button>
+  </div>
+  <form id="feedback-form" class="ask-form" hidden><input id="feedback-input" maxlength="500" placeholder="告诉 agent，例如：我用的是红色导线" aria-label="反馈内容"><button type="submit">发送</button></form>
+ </div>
+</div>
+
+<!-- Session & memory drawer (persistent, like a chat sidebar) -->
+<aside id="drawer" class="drawer" hidden aria-label="会话与记忆">
+ <div class="panel-heading"><h2>会话 <span>与记忆</span></h2><button id="close-drawer" class="text-button">关闭 ✕</button></div>
+ <button id="new-session" class="primary">＋ 新会话</button>
+ <div id="new-session-form" class="new-session-form" hidden>
+  <label for="new-title">名称 <span>选填</span></label><input id="new-title" maxlength="80" placeholder="例如：周三下午的实验">
+  <label for="inherit-from">继承记忆自</label><select id="inherit-from"><option value="">不继承（全新）</option></select>
+  <div id="inherit-sections" class="inherit-sections">
+   <label><input type="checkbox" value="facts" checked> 已读取的信息</label>
+   <label><input type="checkbox" value="scene" checked> 任务场景画面</label>
+   <label><input type="checkbox" value="plan" checked> 推测的计划</label>
+   <label><input type="checkbox" value="effects"> 动作效果记录</label>
+   <label><input type="checkbox" value="anchor"> 上一动作参考帧</label>
+   <label><input type="checkbox" value="answers" checked> 我的回答与提问偏好</label>
+  </div>
+  <div class="row"><button id="create-session" class="primary">创建并切换</button><button id="cancel-new-session">取消</button></div>
+ </div>
+ <ul id="session-list" class="session-list"></ul>
+ <section class="memory-manager"><div class="intent-heading"><strong>当前会话的记忆</strong><button id="clear-memory" class="text-button danger">清空全部记忆</button></div>
+  <p class="muted">删除后不会再传给模型，同时会重开模型线程。照片仅保存在本机。</p>
+  <div id="memory-items"></div>
+ </section>
+</aside>
+
+<main>
+<section class="intro"><div><div class="eyebrow">SEE · UNDERSTAND · GUIDE</div><h1>让下一步，出现在眼前。</h1><p>捕获真实场景，以可见依据理解进度，让引导回到操作现场。</p></div><div class="session"><span class="dot"></span><span id="session-label">等待摄像头</span></div></section>
+<div id="task-banner" class="task-banner" hidden><span id="task-banner-text"></span><button id="banner-new-session" class="text-button">改为新会话…</button><button id="banner-dismiss" class="text-button">知道了</button></div>
+
+<details class="panel" id="board-panel"><summary>面包板：高清标定、端点与连接验证</summary>
+<p>俯拍并露出两端，电池盒放板外。先冻结画面，再对齐实际孔格。端子孔与电源轨不能混用；默认配置不含电源轨。移动接线或换帧后重新录入。</p>
+<label>板型 <select id="board-profile"></select></label>
+<label>标定方式 <select id="board-mode"><option value="manual">手动六点：四个角孔 + 两个复核孔</option><option value="aruco">ArUco 4×4 / 50，标记 0–3</option></select></label>
+<label><input type="checkbox" id="board-layout"> 已核对列数、A/J 方向、中缝及孔组连通规则</label>
+<label><input type="checkbox" id="board-markers"> 使用标记时：四个标记按配置实测位置固定在板上</label>
+<details><summary>自定义板型与电源轨分段</summary><p>坐标单位为孔距；电源轨须逐孔配置位置和分段，未知段用 null。详见 docs/BREADBOARD.md。</p><textarea id="board-profile-json" rows="8" aria-label="板型 JSON"></textarea></details>
+<div class="row"><button id="board-freeze">冻结高清帧</button><button id="board-check">校验孔格</button><button id="board-undo">撤销最后一点</button><button id="board-read" disabled title="把编号图和原照片发给 Codex，由它提议每个线端/元件脚所在的孔名；你逐个核对后采用">让 Codex 读端点候选</button><select id="board-zoom" aria-label="照片缩放"><option value="fit">适应宽度</option><option value="native">原始像素（可滚动）</option></select></div>
+<p id="board-status" role="status">先冻结高清画面。</p><p id="board-anchors"></p>
+<div class="board-scroll"><div class="board-stage"><img id="board-photo" alt="冻结照片，点击孔中心进行标定或确认端点" hidden><svg id="board-overlay" viewBox="0 0 100 100" aria-hidden="true"></svg></div></div>
+<img id="board-warp" alt="矫正后的孔格编号图" hidden>
+<div id="board-circuit" class="board-circuit" hidden><div class="intent-heading"><strong>电路判断（确定性规则）</strong><span id="board-circuit-status" class="badge"></span></div><p id="board-circuit-summary"></p><ul id="board-findings" class="board-findings"></ul><small class="muted">端点命名：W1.1/W1.2 导线两端，R1.1/R1.2 电阻，LED1.A（长脚）/LED1.K（短脚），BAT.+/BAT.- 电源引线。建议的移动会在照片上用橙色箭头画出；移动前先断电。</small></div>
+<div id="board-proposals" class="board-proposals"></div>
+<label>端点编号 <input id="board-pin-id" placeholder="如 W1.1 / W1.2 / R1.1 / LED1.A / BAT.+" maxlength="40"></label>
+<p>孔格通过后，填写编号并点击原照片中确实可见的入孔点，表示人工确认；看不见的端点不要猜。颜色相同不代表同一根线。Codex 提议的端点（橙色虚圈）同样需要你对照原照片采用。</p>
+<ul id="board-pin-list"></ul>
+<div class="row"><select id="board-a" aria-label="端点 A"></select><select id="board-b" aria-label="端点 B"></select><button id="board-wire">确认是同一根导线两端</button></div>
+<p>此按钮仅用于导线；电阻和 LED 的两脚不能合并为短接。</p>
+<div class="row"><select id="board-target-value" aria-label="目标关系"><option value="yes">目标：应相通</option><option value="no">目标：应隔离</option></select><button id="board-target">添加目标关系</button></div>
+<label><input type="checkbox" id="board-power-off"> 已断电，用万用表通断档测了所选两端</label>
+<div class="row"><select id="board-measure-value" aria-label="测量结果"><option value="unknown">不清楚</option><option value="closed">导通</option><option value="open">不导通</option></select><button id="board-measure">记录测量</button><button id="board-clear-links">清空关系与测量</button></div>
+<pre id="board-entries"></pre><pre id="board-verdicts" aria-live="polite"></pre>
+<div class="row"><button id="board-submit" disabled>用此标定帧分析</button><button id="board-export" disabled>导出连接证据</button></div>
+<details><summary>连接表与确定性比对结果</summary><pre id="board-result"></pre></details>
+</details>
+
+<div class="workspace">
+<section class="vision-panel panel">
+<div class="panel-heading"><h2><span class="tiny-square"></span> 视觉现场</h2><div class="segmented"><button id="snapshot-tab" class="selected">分析照片</button><button id="live-tab">实时画面</button></div></div>
+<div class="viewport" id="viewport"><div class="image-plane" id="image-plane"><img id="frame" alt="当前分析使用的摄像头照片" hidden><video id="video" autoplay playsinline muted hidden></video><div id="overlays"></div><svg id="snapshot-cues" class="cue-layer" aria-hidden="true"></svg><div id="live-boxes" class="action-layer"></div><svg id="live-cues" class="cue-layer" aria-hidden="true"></svg><div id="focus-box" hidden></div></div>
+<div class="empty" id="empty"><div class="viewfinder">⌖</div><h3>从你的视角开始</h3><p>开启 Mac 摄像头，让操作区域进入画面</p><button id="start-camera" class="primary">开启摄像头 <span>↗</span></button><small>仅在点击分析或开启连续观察后发送照片至 Codex 服务</small></div>
+<div class="viewport-top"><span class="camera-tag" id="frame-tag">CAMERA OFF</span><span id="frame-age">尚未采集</span></div>
+
+<div id="guide-inset" hidden><div class="guide-inset-plane" id="guide-inset-plane"><img id="guide-inset-image" alt="带标注的分析照片"><div id="guide-inset-boxes"></div><svg id="guide-inset-cues" class="cue-layer" aria-hidden="true"></svg></div><button id="expand-guide" class="guide-inset-expand" title="放大" aria-label="放大">⤢</button></div><div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+</div>
+<div class="camera-controls"><select id="camera-select" aria-label="摄像头"><option value="">默认摄像头</option></select><button id="connect-camera">开启摄像头</button><button id="stop-camera" disabled>关闭摄像头</button><label class="toggle"><input type="checkbox" id="show-overlays" checked> 显示标注</label><label class="toggle"><input type="checkbox" id="show-live-cues" checked> 实时画面叠加示意</label><button id="select-focus">框选细节</button><button id="clear-focus" hidden>清除选框</button><span id="preview-stats">预览帧率 —</span><span id="resolution">— × —</span></div>
+<div class="capture-controls"><button id="capture" class="primary" disabled>◎ 拍照并分析</button><button id="auto" disabled>▷ 开始流式观察</button><select id="interval" aria-label="分析间隔"><option value="0.5">每 0.5 秒采一帧</option><option value="1" selected>每 1 秒采一帧</option><option value="2">每 2 秒采一帧</option></select><button id="cancel" hidden>取消分析</button></div>
+<div class="capture-readiness"><span id="capture-status" role="status">正在连接服务；请先开启摄像头。</span> <button id="retry-backend" class="text-button" hidden>重新连接服务</button></div>
+<div id="notice" role="status">先设置任务，或直接开始自由观察。</div>
+<div id="focus-hint" class="muted">细节不清时，框选操作区域后再分析；实时预览会持续播放。</div><div id="input-stats" class="timing-detail">已发送 0 帧 · 丢弃过时帧 0</div><div id="timing-detail" class="timing-detail">快速指导 — · 完整分析 —</div>
+<div class="metrics"><div><span>快速指导耗时</span><strong id="guide-latency">—<small>s</small></strong></div><div><span>完整分析耗时</span><strong id="latency">—<small>s</small></strong></div><div><span>自评置信度</span><strong id="confidence">—</strong></div><div><span>输入 / 输出 TOKENS</span><strong id="tokens">— / —</strong></div></div>
+</section>
+<aside>
+<section class="panel task-panel"><div class="panel-heading"><h2>01 <span>任务与进度</span></h2><button id="reset" class="text-button">新会话 ↗</button></div>
+<label for="domain">领域规则 <span>自动根据目标关键词加载</span></label><select id="domain"><option value="auto">自动识别</option><option value="none">通用（不加载领域规则）</option></select>
+<div id="presets" class="presets"></div>
+<label for="ask-level">提问频率 <span>只在“猜错的代价”高于“打扰你的代价”时提问</span></label><select id="ask-level"><option value="quiet">少打扰：尽量自己推断</option><option value="balanced" selected>平衡</option><option value="careful">多确认：拿不准就问</option></select>
+<label for="goal">你想完成什么？ <span>可留空，由模型推测</span></label><input id="goal" maxlength="2000" placeholder="例如：整理桌面，准备专注工作">
+<label for="plan">操作说明 / 要求 <span>需要精确位置时填写</span></label><textarea id="plan" rows="3" maxlength="4000" placeholder="例如：图纸或说明中的目标位置、尺寸、顺序。不要只写“帮我做”。"></textarea>
+<label for="steps">操作步骤 <span>选填 · 每行一步 · 留空则模型推测</span></label><textarea id="steps" rows="3" placeholder="清理桌面杂物&#10;摆放电脑和笔记本&#10;确认工作区准备就绪"></textarea>
+<small class="brief-hint">停止输入约 1 秒后，Codex 会先读懂这段文字并给出第一步；观察中也可以随时修改。</small>
+<div id="brief-panel" class="brief-panel" hidden><div class="intent-heading"><strong>任务理解（来自文字）</strong><span id="brief-status" class="badge">—</span></div><p id="brief-goal"></p><div id="brief-first" class="brief-first"></div><ol id="brief-steps"></ol><ul id="brief-requirements"></ul><ul id="brief-notes"></ul></div>
+<div class="progress-header"><span id="phase">自由观察</span><strong id="progress-label">—</strong></div><div class="progress-track"><div id="progress-bar"></div></div><ol id="step-list"><li class="step-placeholder">设置步骤后，逐步显示完成依据</li></ol></section>
+<section class="panel result-panel"><div class="panel-heading"><h2>02 <span>当前判断</span></h2><span id="quality" class="badge">待观察</span></div><div class="memory-panel"><strong>本轮使用的任务记忆</strong><p id="scene-memory-status">等待建立任务记忆</p><p id="scene-memory-summary"></p><ul id="known-facts"></ul></div><div id="inspection-panel" class="inspection-panel" hidden><div class="intent-heading"><strong id="inspection-target"></strong><span id="inspection-status" class="badge"></span></div><p id="inspection-question"></p><ul id="inspection-findings"></ul><p id="inspection-missing"></p><small id="inspection-quality"></small></div><div id="diagnostic-panel" class="diagnostic-panel"><div class="intent-heading"><strong>异常检查与排查</strong><span id="diagnostic-status" class="badge">等待观察</span></div><p id="diagnostic-observed">分析后显示实际现象，并与任务目标比较。</p><p id="diagnostic-expected"></p><ul id="state-checks" class="state-checks"></ul><small id="diagnostic-frame">每行是一项“期望 vs 实际”，尚未判断时显示待核实。</small><div id="diagnostic-causes"></div></div><div class="next-step"><div class="eyebrow" id="guidance-mode">下一步指导</div><strong id="next-title">让操作区域完整入镜</strong><p id="next-instruction">保持相机稳定，确保光线充足。</p><small id="check"></small><ul id="action-preconditions"></ul><p id="action-location"></p><div id="action-stage" hidden><img id="action-image" alt="当前动作所依据的照片"><div id="action-boxes"></div><svg id="action-cues" class="cue-layer" aria-hidden="true"></svg></div><div id="action-snapshot-meta" class="muted"></div><button id="inspect-action" hidden>查看标注大图</button></div><h3 id="activity">等待第一张照片</h3><p id="summary">分析结果将显示在这里，模糊或不可见的动作会明确标记为不确定。</p><div class="temporal-panel"><div class="intent-heading"><strong>前后动作对照</strong><span id="temporal-state" class="badge">待观察</span></div><img id="reference-frame" alt="本轮使用的历史动作参考帧" hidden><p id="temporal-reference">首帧将建立观察基线</p><strong id="temporal-action"></strong><ul id="temporal-changes"></ul><small id="temporal-memory"></small></div><div class="intent-panel"><div class="intent-heading"><strong>意图与可能的下一步</strong><span id="intent-status" class="badge">待观察</span></div><div id="intent-candidates"><p>结合画面与任务目标，推断可能想尝试的操作。</p></div><p id="intent-clarification"></p><small>意图是假设，候选置信度为模型自评。</small></div><details class="stream-preview"><summary id="partial-state">输出追踪 · 待机</summary><pre id="partial-output" aria-live="polite">等待流式输出</pre></details></section>
+</aside>
+</div>
+<section class="panel effect-panel" aria-label="动作效果核验">
+<div class="panel-heading"><h2>动作 → 预期状态变化 → 实际观察</h2><span id="effect-status" class="badge">等待动作</span></div>
+<div class="effect-comparison"><div><h4>这个动作应改变什么？</h4><strong id="effect-action">尚无待验证动作</strong><p id="effect-expected">提出动作时保存预期，后续画面再核验。</p></div><div><h4>当前观察支持这个变化吗？</h4><p id="effect-observed">等待后续观察</p><p id="effect-verification"></p></div></div>
+<p id="effect-origin" class="muted"></p><p id="effect-pending" class="muted"></p>
+<details><summary id="effect-record-count">动作效果记录 · 0 条</summary><div class="effect-table-scroll"><table class="effect-table"><thead><tr><th>动作 / 参考帧</th><th>预期状态变化</th><th>实际观察 / 证据</th><th>是否匹配 / 后续核验</th></tr></thead><tbody id="effect-records"></tbody></table></div></details>
+<p class="footnote">每次核验保留一条记录，同一动作可持续更新。记录随会话保存在本机，可在「会话与记忆」中删除。状态匹配不证明唯一因果。</p>
+</section>
+<div class="bottom-grid"><section class="panel evidence-panel"><div class="panel-heading"><h2>03 <span>判断依据</span></h2><span class="muted">可核验的观察摘要</span></div><div class="evidence-columns"><div><h4>可见证据</h4><ul id="evidence"><li>等待分析</li></ul></div><div><h4>不确定性 / 待确认</h4><ul id="uncertainties"><li>等待分析</li></ul></div></div><p class="footnote">这里展示观察事实与简短判断摘要，不包含模型内部思维链。置信度为模型自评，未作概率校准。</p></section><section class="panel debug-panel"><div class="panel-heading"><h2>04 <span>运行追踪</span></h2><button id="export" class="text-button" disabled>导出 JSON ↓</button></div><div id="trace" class="trace"><div><span>00.00</span>system.ready</div></div><details><summary>结构化结果 / 调试指标</summary><pre id="raw">{ "status": "idle" }</pre></details></section></div>
+<section class="history-section"><div class="panel-heading"><h2>观察记录</h2><span class="muted">本会话最近的结果（保存在本机）· 点击回看</span></div><div id="history"><p class="muted">每次观察都保留对应照片，方便比较不同阶段。</p></div></section>
+<footer><span>AgentXR / 0.14</span><span>Mac camera → Codex (guide + full lanes) → Contextual guidance</span><span>2D 图像标注 · 非三维空间追踪</span></footer>
+</main><script src="/cues.js"></script><script src="/app.js"></script><script src="/board.js"></script></body></html>

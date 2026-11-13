@@ -1,0 +1,32 @@
+{
+  "backend_version": "0.8.0",
+  "input": "4047-byte synthetic image, not camera",
+  "status": "done",
+  "metrics": {
+    "image_bytes": 4047,
+    "model": "gpt-6-astra",
+    "reasoning_effort": "medium",
+    "retry_count": 0,
+    "delta_count": 486,
+    "queue_ms": 0,
+    "cli_ready_ms": 98,
+    "thread_reused": false,
+    "process_generation": 2,
+    "detail_image_bytes": 0,
+    "reference_image_bytes": 0,
+    "expectation_image_bytes": 0,
+    "total_image_bytes": 4047,
+    "turn_started_ms": 158,
+    "first_delta_ms": 7121,
+    "tokens": {
+      "input_tokens": 22463,
+      "output_tokens": 497,
+      "reasoning_tokens": 0
+    },
+    "guidance_owner": "task",
+    "latency_ms": 17689,
+    "remote_turn_ms": 17531,
+    "elapsed_ms": 17689
+  },
+  "error": null
+}

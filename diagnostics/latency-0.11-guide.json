@@ -1,0 +1,71 @@
+{
+  "samples": [
+    {
+      "lane": "guide",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 7406,
+      "latency_ms": 10784,
+      "capture_to_result_ms": 10785,
+      "context_chars": 248,
+      "schema_chars": 3001,
+      "output_chars": 519,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 9626,
+        "output_tokens": 194,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false
+    },
+    {
+      "lane": "guide",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 6060,
+      "latency_ms": 9597,
+      "capture_to_result_ms": 9599,
+      "context_chars": 644,
+      "schema_chars": 3001,
+      "output_chars": 540,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 9793,
+        "output_tokens": 209,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false
+    },
+    {
+      "lane": "guide",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 5827,
+      "latency_ms": 9522,
+      "capture_to_result_ms": 9524,
+      "context_chars": 649,
+      "schema_chars": 3001,
+      "output_chars": 542,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 9798,
+        "output_tokens": 207,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false
+    }
+  ],
+  "summary": {
+    "lane": "guide",
+    "completed": 3,
+    "requested": 3,
+    "p50_ms": 9599,
+    "p95_ms": 10785,
+    "first_delta_p50_ms": 6060,
+    "within_10s_rate": 0.6666666666666666
+  },
+  "note": "Actual CLI samples. Small sample sizes do not establish a latency guarantee; results do not validate accuracy."
+}

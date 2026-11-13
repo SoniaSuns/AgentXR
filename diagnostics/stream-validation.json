@@ -1,0 +1,30 @@
+{
+  "verified_backend_version": "0.2.0",
+  "input": "4047-byte synthetic image, not camera",
+  "result_status": "done",
+  "metrics": {
+    "image_bytes": 4047,
+    "model": "gpt-6-astra",
+    "reasoning_effort": "low",
+    "retry_count": 0,
+    "delta_count": 144,
+    "queue_ms": 0,
+    "cli_ready_ms": 0,
+    "thread_reused": false,
+    "process_generation": 1,
+    "turn_started_ms": 1119,
+    "first_delta_ms": 6472,
+    "tokens": {
+      "input_tokens": 16299,
+      "output_tokens": 154,
+      "reasoning_tokens": 0
+    },
+    "latency_ms": 8998,
+    "remote_turn_ms": 7879,
+    "elapsed_ms": 8998
+  },
+  "sse_snapshots_received": 28,
+  "partial_before_completion": true,
+  "final_received": true,
+  "note": "Intent-guidance version 0.3 still requires restart and real-model verification."
+}

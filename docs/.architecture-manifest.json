@@ -1,0 +1,298 @@
+{
+ "files": {
+  "README.md": "20033a5742a69ae0",
+  "actions.py": "307d0758f6b7b998",
+  "ask.py": "b5221530a5f264af",
+  "board_reader.py": "ff950a1b7be3d91d",
+  "breadboard.py": "4763de2712a2d43b",
+  "brief.py": "5693af04e87e1f1c",
+  "circuit.py": "6f147df0f2c8a3ae",
+  "codex_rpc.py": "279306f2f31abfac",
+  "config.py": "76c1ebad2537fae4",
+  "contracts.py": "5aece31b12d1968c",
+  "crop.py": "87091f325a8c707c",
+  "diagnostics.py": "a9cec9f35dd2ef24",
+  "docs/ARCHITECTURE.template.md": "0f91c5210b751b8d",
+  "domains/electronics.json": "e98fb68857c293dc",
+  "domains.py": "8190ea1cdbad2103",
+  "effects.py": "ff9d6881c8350e14",
+  "fast_inspection.py": "afe4e12120674519",
+  "guide.py": "3e51b5e7e9e4e1f7",
+  "inspection.py": "3e9702ce603be628",
+  "local_vlm.py": "f497935810acd8d8",
+  "observer_prompt.txt": "0474daa45ea4faed",
+  "requirements-vision.txt": "4f499c593cc13d02",
+  "scene_memory.py": "69215fa48d9beb27",
+  "scripts/benchmark_latency.py": "b755ad3e59f3fe47",
+  "scripts/make_board_markers.py": "474a308f5a392e0b",
+  "scripts/smoke_cli.py": "6a6fbc76d32069f0",
+  "scripts/update_docs.py": "48a6afa99cb5d9ed",
+  "server.py": "c72b12730a8a55af",
+  "settings.json": "e298403f93d42285",
+  "start.command": "19e892ba70f5ba0b",
+  "store.py": "17f335df1615d9e5",
+  "temporal.py": "7773422c4e737784",
+  "tests/fake_app_server.py": "7326fd5df624295f",
+  "tests/test_ask.py": "3bda0e2362c14d78",
+  "tests/test_board_frontend.cjs": "c7b946c58d422621",
+  "tests/test_board_reader.py": "7ad70150228e1b76",
+  "tests/test_breadboard.py": "2bf45e6e9eebb2b1",
+  "tests/test_circuit.py": "7d9fe91c8a1c0e7a",
+  "tests/test_effects.py": "c0b48b842102bbdf",
+  "tests/test_fast_inspection.py": "6124e36100d226ab",
+  "tests/test_frontend.cjs": "32c93791ea3a9db0",
+  "tests/test_inspection.py": "522f4ab246042b02",
+  "tests/test_lanes.py": "0fa5ba90dc0dc966",
+  "tests/test_scene_memory.py": "eb2562ec39c7cfbc",
+  "tests/test_server.py": "a6545fde306bda79",
+  "tests/test_visual.py": "02ed726853e3fff4",
+  "visual.py": "5aabab425604b15b",
+  "web/app.js": "894f27b960a353c8",
+  "web/board.js": "0365ecf75ff86a3c",
+  "web/cues.js": "0e98ce668daeb890",
+  "web/index.html": "f262dfa86c358eb2",
+  "web/style.css": "881aab10a987952b"
+ },
+ "log": [
+  {
+   "time": "2026-11-13 13:28:21",
+   "added": [],
+   "changed": [
+    "README.md"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:47:13",
+   "added": [
+    "circuit.py"
+   ],
+   "changed": [],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:47:49",
+   "added": [],
+   "changed": [
+    "breadboard.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:47:49",
+   "added": [
+    "tests/test_circuit.py"
+   ],
+   "changed": [],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:48:09",
+   "added": [],
+   "changed": [
+    "circuit.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:48:09",
+   "added": [],
+   "changed": [
+    "circuit.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:48:20",
+   "added": [],
+   "changed": [
+    "tests/test_circuit.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:48:36",
+   "added": [],
+   "changed": [
+    "circuit.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:48:36",
+   "added": [],
+   "changed": [
+    "tests/test_circuit.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:49:07",
+   "added": [],
+   "changed": [
+    "breadboard.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:50:53",
+   "added": [
+    "board_reader.py"
+   ],
+   "changed": [],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:50:53",
+   "added": [],
+   "changed": [
+    "server.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:50:54",
+   "added": [],
+   "changed": [
+    "server.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:50:54",
+   "added": [],
+   "changed": [
+    "server.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:50:54",
+   "added": [],
+   "changed": [
+    "server.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:50:54",
+   "added": [],
+   "changed": [
+    "server.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:50:54",
+   "added": [],
+   "changed": [
+    "tests/fake_app_server.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:51:20",
+   "added": [
+    "tests/test_board_reader.py"
+   ],
+   "changed": [],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:51:34",
+   "added": [],
+   "changed": [
+    "board_reader.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:51:34",
+   "added": [],
+   "changed": [
+    "board_reader.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:53:46",
+   "added": [],
+   "changed": [
+    "web/board.js"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:53:46",
+   "added": [],
+   "changed": [
+    "web/index.html"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:53:46",
+   "added": [],
+   "changed": [
+    "web/index.html"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:53:47",
+   "added": [],
+   "changed": [
+    "web/app.js"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:53:47",
+   "added": [],
+   "changed": [
+    "web/style.css"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:53:47",
+   "added": [],
+   "changed": [
+    "observer_prompt.txt"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:53:47",
+   "added": [],
+   "changed": [
+    "start.command"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:54:06",
+   "added": [],
+   "changed": [
+    "tests/test_frontend.cjs"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:58:08",
+   "added": [],
+   "changed": [
+    "README.md"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-13 13:58:08",
+   "added": [],
+   "changed": [
+    "docs/ARCHITECTURE.template.md"
+   ],
+   "removed": []
+  }
+ ]
+}

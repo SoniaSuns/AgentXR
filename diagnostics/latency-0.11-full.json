@@ -1,0 +1,52 @@
+{
+  "samples": [
+    {
+      "lane": "full",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 6118,
+      "latency_ms": 23088,
+      "capture_to_result_ms": 23089,
+      "context_chars": 415,
+      "schema_chars": 11174,
+      "output_chars": 2450,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 12511,
+        "output_tokens": 873,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false
+    },
+    {
+      "lane": "full",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 2218,
+      "latency_ms": 23645,
+      "capture_to_result_ms": 23646,
+      "context_chars": 3022,
+      "schema_chars": 11174,
+      "output_chars": 2912,
+      "image_count": 2,
+      "tokens": {
+        "input_tokens": 16041,
+        "output_tokens": 1087,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": true
+    }
+  ],
+  "summary": {
+    "lane": "full",
+    "completed": 2,
+    "requested": 2,
+    "p50_ms": 23367.5,
+    "p95_ms": 23646,
+    "first_delta_p50_ms": 4168.0,
+    "within_10s_rate": 0.0
+  },
+  "note": "Actual CLI samples. Small sample sizes do not establish a latency guarantee; results do not validate accuracy."
+}

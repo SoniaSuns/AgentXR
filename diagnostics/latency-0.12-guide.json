@@ -1,0 +1,138 @@
+{
+  "samples": [
+    {
+      "lane": "guide",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 7422,
+      "latency_ms": 11694,
+      "capture_to_result_ms": 11695,
+      "context_chars": 310,
+      "schema_chars": 3774,
+      "output_chars": 566,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 10122,
+        "output_tokens": 206,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false,
+      "question": [],
+      "interaction": {
+        "decision": "none"
+      },
+      "guidance": {
+        "mode": "observe",
+        "title": "展示操作对象",
+        "instruction": "请将镜头对准要操作的实物，并拍到完整对象及周围环境；当前仅见蓝色抽象图案。",
+        "check": "画面中能清楚辨认操作对象。",
+        "precision": "none",
+        "location_basis": "unknown"
+      }
+    },
+    {
+      "lane": "guide",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 8298,
+      "latency_ms": 11940,
+      "capture_to_result_ms": 11941,
+      "context_chars": 618,
+      "schema_chars": 3774,
+      "output_chars": 561,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 10240,
+        "output_tokens": 200,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false,
+      "question": [],
+      "interaction": {
+        "decision": "none"
+      },
+      "guidance": {
+        "mode": "observe",
+        "title": "展示操作对象",
+        "instruction": "当前只有蓝色图案，请将镜头对准要操作的物体及周围工作区域。",
+        "check": "画面中能清楚看到操作对象和工作区域。",
+        "precision": "none",
+        "location_basis": "unknown"
+      }
+    },
+    {
+      "lane": "guide",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 5924,
+      "latency_ms": 9499,
+      "capture_to_result_ms": 9500,
+      "context_chars": 617,
+      "schema_chars": 3774,
+      "output_chars": 559,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 10242,
+        "output_tokens": 197,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false,
+      "question": [],
+      "interaction": {
+        "decision": "none"
+      },
+      "guidance": {
+        "mode": "observe",
+        "title": "展示操作对象",
+        "instruction": "请将镜头对准要操作的物体及周围区域，目前仅见蓝色图案。",
+        "check": "画面中能清楚看到操作对象和工作区域。",
+        "precision": "none",
+        "location_basis": "unknown"
+      }
+    },
+    {
+      "lane": "guide",
+      "status": "done",
+      "error": null,
+      "first_delta_ms": 6387,
+      "latency_ms": 9976,
+      "capture_to_result_ms": 9978,
+      "context_chars": 618,
+      "schema_chars": 3774,
+      "output_chars": 558,
+      "image_count": 1,
+      "tokens": {
+        "input_tokens": 10246,
+        "output_tokens": 196,
+        "reasoning_tokens": 0
+      },
+      "reasoning_effort": "low",
+      "thread_reused": false,
+      "question": [],
+      "interaction": {
+        "decision": "none"
+      },
+      "guidance": {
+        "mode": "observe",
+        "title": "展示操作对象",
+        "instruction": "请将镜头对准要操作的物体及周围区域，目前只看到蓝色图案。",
+        "check": "画面中能看清操作对象和工作区域。",
+        "precision": "none",
+        "location_basis": "unknown"
+      }
+    }
+  ],
+  "summary": {
+    "lane": "guide",
+    "completed": 4,
+    "requested": 4,
+    "p50_ms": 10836.5,
+    "p95_ms": 11941,
+    "first_delta_p50_ms": 6904.5,
+    "within_10s_rate": 0.5
+  },
+  "note": "Actual CLI samples. Small sample sizes do not establish a latency guarantee; results do not validate accuracy."
+}

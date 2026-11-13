@@ -1,0 +1,19 @@
+{
+  "proxy": "",
+  "reasoning_effort": "low",
+  "fast_inspection": true,
+  "lanes": {
+    "guide": false,
+    "guide_reasoning_effort": "low",
+    "inspection_reasoning_effort": "low"
+  },
+  "images": {
+    "current_max_width": 768,
+    "memory_max_width": 512,
+    "detail_max_side": 1024
+  },
+  "storage": {
+    "dir": "~/.agentxr/sessions",
+    "persist_images": true
+  }
+}
