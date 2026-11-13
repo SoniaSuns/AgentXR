@@ -1,6 +1,6 @@
 # AgentXR 架构说明
 
-**版本 0.14.0** · 文档最近一次随代码更新：2026-11-13 13:58:08 · 位置：`/Users/dase_mac2024/Downloads/agentxr/ARCHITECTURE.md`
+**版本 0.14.0** · 文档最近一次随代码更新：2026-11-13 14:25:35 · 位置：`/Users/dase_mac2024/Downloads/agentxr/ARCHITECTURE.md`
 
 > 本文件由 `scripts/update_docs.py` 根据 `docs/ARCHITECTURE.template.md` 和当前代码自动生成，**不要直接编辑 ARCHITECTURE.md**。
 > 叙述部分在模板里改；标有「自动生成」的小节直接从代码抽取，代码一变就会跟着变。
@@ -232,6 +232,7 @@ settings.json 中还有这些服务器启动参数：`fast_inspection`、`proxy`
 
 每次检测到被跟踪文件变化时记一条（最近 30 条，新的在前）。
 
+- 2026-11-13 14:25:35：修改 `README.md`
 - 2026-11-13 13:58:08：修改 `docs/ARCHITECTURE.template.md`
 - 2026-11-13 13:58:08：修改 `README.md`
 - 2026-11-13 13:54:06：修改 `tests/test_frontend.cjs`
@@ -261,7 +262,6 @@ settings.json 中还有这些服务器启动参数：`fast_inspection`、`proxy`
 - 2026-11-13 13:47:49：新增 `tests/test_circuit.py`
 - 2026-11-13 13:47:49：修改 `breadboard.py`
 - 2026-11-13 13:47:13：新增 `circuit.py`
-- 2026-11-13 13:28:21：修改 `README.md`
 
 ## 面包板几何路径
 

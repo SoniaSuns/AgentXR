@@ -1,303 +1,43 @@
-# AgentXR 0.14 — 面包板孔格标定 + Codex 读端点 + 确定性回路判断
+# AgentXR
 
-## 0.14 概览：模型不追线，几何与规则判断连接
+English | [简体中文](README.zh-CN.md)
 
-针对「Codex 看不出线之间怎么接」：视觉语言模型沿线追踪的能力是实测薄弱项（见 docs/BREADBOARD.md 的参考文献），所以 0.14 把「线接在哪」从模型手里拿走：
+A camera-based assistant for hands-on tasks. AgentXR uses Codex to interpret your workspace, track progress, and show the next step with visual annotations.
 
-- **孔格标定**（0.13 末期由 Codex 协作加入）：冻结高清帧，六点手动或 ArUco 标定，源图孔距 ≥20 px、复核误差和暗孔纹理门槛，不达标就拒绝。
-- **Codex 读端点候选**：把带列号/行字母的编号图发给 Codex，让它用孔名回答每根线端、每只脚在哪（Set-of-Mark，不报坐标、不猜另一端）。代码核对孔名、置信度和重复，结果作为候选在照片上画橙色虚圈，你逐个采用后才算数。
-- **确定性回路判断（`circuit.py`）**：从已确认端点算节点与回路：闭合 / 未闭合 / 短路 / 接反 / 缺限流电阻 / 元件被绕过 / 极性未知 / 几何与实测矛盾；未闭合时做单步修复搜索，直接给出「把 LED1.A 从 f10 移到 e10（与 R1.2 相通），先断电」并附核验办法；没有单步方案时列出悬空端点。照片上用橙色箭头画出建议的移动。
-- **Codex 的角色**：拿到 `board_evidence.circuit` 后只转述规则给出的下一步，并补充画面佐证或矛盾，不再自行推断改线。
-- **测量闭环**：断电通断测量照旧录入；实测导通会并入回路判断，实测不通与几何相通时报矛盾。
+## Features
 
-用法与边界见 [docs/BREADBOARD.md](docs/BREADBOARD.md)。需要重启 `start.command`（会优先用带 OpenCV 的 `.venv`）并强制刷新页面。
+- **Visual guidance:** analyze a photo or continuously sample camera frames, with streamed instructions, highlights, and arrows.
+- **Task context:** track goals, steps, feedback, and observations across locally saved sessions.
+- **Breadboard support:** calibrate a hole grid, review suggested endpoints, and check confirmed connections with deterministic circuit rules.
 
-## 0.13 — 任务理解 + 快速指导 + 完整分析双通道 + 按代价提问
+## Quick start
 
-Mac 摄像头持续采样 → 最新帧 + 上一有意义动作帧 → 常驻 Codex app-server → SSE 增量输出 → 结果校验与 XR 风格标注。
-Python 3.10+，现代 Safari/Chrome，已登录的 Codex CLI（本机 0.166.0）；普通观察无需第三方 Python/npm 包；可选面包板几何功能需要 OpenCV 与 numpy。
-
-
-## 面包板几何与连接验证
-
-新增冻结高清帧、六点/ArUco 标定、孔格编号、人工端点确认、确定性节点比对和通断记录。使用说明、依赖与已知边界见 [docs/BREADBOARD.md](docs/BREADBOARD.md)。本功能不会把颜色候选自动当成真实接线，也没有宣称完成无人监督的照片转网表。
-
-## 0.13 概览：先读懂任务文字，再看画面
-
-- **任务理解（`brief.py`）**：在「任务与进度」里输入目标 / 操作说明 / 步骤，停顿约 1 秒后，服务端用一个独立的 Codex app-server 做一次**纯文字**解析（不发图片），返回目标、步骤及每步的完成标志、从说明里摘出的具体要求（位置、数值、方向、禁止事项）、缺少的信息、安全前提，以及开拍前就能做的**第一步指导**。结果显示在任务栏的「任务理解」卡片和左下角总览里，并保存在会话中。
-- **用于每一帧**：两个分析通道都会收到 `task_brief`（要求、每步完成标志、安全前提），按它给出下一步；没有填步骤时，解析出的步骤作为草稿计划，完整分析可根据画面修正。
-- 你填的目标和步骤仍然一字不改；文字没变不会重复解析；文字改了，旧解析不会再发给模型。
-- **观察中可改任务**：流式观察时任务栏不再锁定，修改后立即重新解析，下一帧开始使用。
-- **单通道 Codex 分析 + 进度显示**：默认只跑一个 Codex 完整分析（`lanes.guide` 默认 false；在 `settings.json` 里设为 true 可重新开启快速通道）。分析期间任务总览顶部显示阶段（已上传 → 正在发送 → Codex 正在看图 → 正在输出 N 字 → 已校验）、已用秒数和上次耗时，并带进度条；指引文字边生成边显示。
-- **观察 + 下一步**：每次结果先给一句对现场的观察（`summary`，30 字内：哪根线接在哪、什么已在位、结果是否出现），再给下一步；总览和画面叠层都显示。
-- **标出移动对象和目标位置**：动作框按角色标注「移动：」「放到：」「接到：」「工具：」；模型定位了对象和目标位置但没画箭头时，服务端 `ensure_move_cue()` 自动补一条从对象指向目标的箭头。
-- **分析照片小窗只保留图片**：去掉文字，拖动图片本身移动它，右上角 ⤢ 放大。
-- 本地快模型（`local_vlm.py`，Ollama + Qwen）保留为可选项（`lanes.guide_backend: ollama`），默认不用。
-- **信息检查只问相对关系（电子电路领域规则）**：`domains/electronics.json` 规定检查请求只能问「是否同列 / 同一半 / 哪条电源轨 / 中缝哪一侧」，不许要求孔号或行列标记（除非你在操作说明里写了具体孔位）；专用读取轮带上领域的 `inspection_prompt`；读不清时按领域的 `inspection_hint` 提示把镜头移到正上方 20–30 厘米。
-- **信息检查不再卡死**：读取结果不再因为模型没有原样回填请求编号或字段名而被丢弃；存在性与连接位置分开记录，全景和裁剪读到的事实合并保留。专用读取及自动放大仍无新信息时，使用同一帧恢复整体诊断，不再等待连续 4 帧；有新事实则继续补齐剩余字段。恢复诊断会发送已有的高分辨率全景（若有）及局部图，结合已知事实选择下一项验证；原始读取结果和未决信息保存在调试指标中。
-- **视觉指导小窗可拖动**：按住标题栏拖动，位置会记住；双击标题栏恢复默认位置。
-
-## 0.12 概览：能回答、能反馈、少打扰
-
-- **可交互**：左下角总览里，提问会以按钮列出选项（标出“我的猜测”），也可直接输入回答，或点“你来判断，这类别再问”。每条指引下有「✓ 做完了 / ✗ 做不到 / ⚠ 指引不对 / ✎ 说点什么」。回答后立即用最新画面重新分析。回答和反馈随会话保存在本机，可在「会话与记忆」里逐条删除，新会话可选择继承。
-- **先推断，后提问**：模型总是给出按最可能理解的下一步，把不确定写成一个带选项的问题（`question`，没有就是 `[]`）。要不要真的打断你由服务端 `ask.py` 决定，模型不能自己决定停下来问。
-- **按代价决定（`ask.py`）**：`P(猜错) × 猜错代价 > 打扰成本` 才提问。
-  - 猜错代价：模型标 low/medium/high/critical（1/3/8/30），不可撤回 ×2，做完画面就能看出对错 ×0.5。
-  - P(猜错)：模型自评与本会话实际记录（你的回答与默认猜测是否一致、你改选了几次；Beta(1,4) 平滑）各占一半。模型常猜错时会更常问。
-  - 打扰成本：少打扰 3 / 平衡 1.5 / 多确认 0.6；60 秒内刚问过别的问题时 ×2。
-  - 四种结果：`none` 不问；`assume` 按猜测继续，并显示不打断的「我按 X 理解 · 改选」；`offer` 没有可执行步骤但缺口不重要时，显示可选问题卡，不计为打扰；`ask` 问题接管指引，同时保留原本准备好的步骤（回答与猜测一致时直接显示）。
-  - 安全类（critical）总是问；已回答过（10 分钟内）或你说过“你来判断”的话题不再问；画面不可用或正在检查信息时不问。
-- 所有数字在 `config.py` 的 `asking` 段，可在 `settings.json` 覆盖。
-
-## 0.11 概览
-
-**延迟（双通道 + 字段重排 + 降采样）**
-- 每帧同时进入两个独立的 Codex app-server：
-  - **快速指导通道 `guide`**：只看当前帧（+框选裁剪），输出指导、任务总览指针、可视化示意和目标框。每轮新线程，后台状态通过上下文显式传入。
-  - **完整分析通道 `full`**：沿用原有意图、前后对照、动作效果、信息检查和诊断，空闲时处理最新帧，校验后的状态再反馈给快速通道。
-- 两个 schema 都把 `guidance` → `task_overview` → `visual_cues` 放在最前面。前端用容错的增量 JSON 解析器（`web/cues.js`），在生成过程中就把指导文字显示到总览面板上，并标明"尚未校验"。
-- 浏览器发送 768px 当前帧和 512px 记忆缩略图；动作参考、预期基线和场景记忆都使用缩略图。局部裁剪最长边 1024px。尺寸可在 `settings.json → images` 中修改。
-- 用简短的 `baseInstructions` 替换 Codex 内置的编程助手系统提示，并关闭只会增加工具定义的 Codex 功能（`settings.json → codex.disable_features`，可设为 `[]` 恢复）。
-- 实测数据：真实 Codex，768px 系统壁纸图，3 次采样，结果见 `diagnostics/latency-0.11-*.json`：
-  - 快速通道：p50 9.6 s，p95 10.8 s；首字约 5–6 s；输入约 9.7k tokens（之前约 16k）。
-  - 完整通道：约 23 s；但 guidance 字段排在最前，首字 2–6 s 后即开始显示指导。
-  - 样本量小，不构成延迟保证；网络和代理波动会直接影响结果。
-
-**去除写死的部分**
-- 领域规则（LED、面包板、电池、断电等）移到 `domains/electronics.json`。核心提示词、schema 和代码与具体领域无关。选"自动识别"时按插件里声明的关键词加载，也可以手动指定或关闭；新增领域只需放一个 JSON 文件。
-- `diagnostics` 改为通用的 `state_checks`（期望 vs 实际），替代原来的 `led_state` / `power_state`；`precision: hole` 改为 `fine_position`；`rewire` 改为 `modify`。改动前的安全前提由领域插件提供。
-- 阈值、记忆容量、线程轮换、图片尺寸和推理强度集中在 `config.py`，可用 `settings.json` 覆盖。
-- 兜底指令优先使用模型自己的文字或验证计划，不再用写死的排查脚本。
-- 未填写步骤时，模型推断目标和粗粒度计划。计划保持稳定：快速通道只能移动"当前步骤"指针，不能标记完成；完整通道要修改计划必须给出原因。
-
-**可视化**
-- `visual_cues` 支持以下类型：箭头 / 插入 / 拔出（流动虚线）、旋转（顺时针或逆时针，1/4、半圈、一圈，带旋转动画）、按压（脉冲圈）、切割（虚线 + 剪刀沿线移动）、工具虚影（手、螺丝刀、扳手、钳子、剪刀、刀、导线、探针、笔、勺、布等沿路径移动）。
-- 示意只在 `mode=act` 且画面可用、置信度足够时绘制，同时叠加在分析照片、实时画面（随时间渐隐并标注是几秒前的画面）、右上角小图和动作卡片上。
-- 左下角固定一个**任务总览面板**：目标（你设定的 / 推测的）、步骤列表、"第 n / m 步"、进度，以及当前指导和验收标准。可以收起。
-
-**持久记忆与会话管理**
-- 会话保存在 `~/.agentxr/sessions/<id>/`（`session.json` 和照片）。刷新页面或重启服务后自动恢复上次的会话。
-- 右上角「☰ 会话与记忆」：
-  - 会话列表，可打开、重命名、删除（需点两次确认）；
-  - 新建会话时可选择从哪个会话继承哪些记忆：已读信息、场景画面、推测计划、效果记录、动作参考帧；
-  - 当前会话的每条记忆都可以单独删除，也可以清空全部。删除后会重开模型线程，删掉的内容不会再传给模型。
-- 修改目标、步骤或说明时默认保留本会话记忆，并提示是否改为新会话。历史记录卡片也可以单独删除。
-- `--no-store` 只在内存中保留记忆；`--no-guide-lane` 恢复单通道。
-
-```bash
-# 真实延迟测量
-python3 scripts/benchmark_latency.py photo.jpg --lane guide --runs 3
-python3 scripts/benchmark_latency.py photo.jpg --lane full --runs 2
-python3 scripts/benchmark_latency.py photo.jpg --lane inspection --target 电池 --field 标称电压
-```
-
-以下为历史版本说明。
-
-## 启动
-
-1. 保持 Surfshark 已连接。`settings.json` 的 `proxy` 现为空，Codex 子进程使用系统 VPN 网络路径。
-2. 若旧版服务仍在运行，在它的终端按 Control+C。
-3. 双击 `start.command`，或运行 `python3 server.py`。
-4. 打开 http://localhost:8765，允许摄像头访问。
+Requires Python 3.10+, a signed-in Codex CLI, and a camera-enabled browser such as Safari or Chrome. Basic observation uses the Python standard library; no npm install is required.
 
 ```sh
-cd /Users/dase_mac2024/Downloads/agentxr
+git clone git@github.com:SoniaSuns/AgentXR.git
+cd AgentXR
 python3 server.py
-# 显式覆盖配置
-python3 server.py --proxy http://127.0.0.1:17891 --reasoning-effort low
-# 指定账号可用的视觉模型或另一个端口
-python3 server.py --model YOUR_MODEL --port 8766
 ```
 
-代理优先级：`--proxy` → `AGENTXR_PROXY` → `settings.json`。传入 `--proxy ''` 使用系统网络路径（Surfshark 连接时由 VPN 路由），并清除 Codex 子进程继承的大小写 HTTP/HTTPS/ALL_PROXY，防止继续访问失效的本地端口。服务不改系统网络设置或全局 Codex 配置。`NO_PROXY` 添加 localhost、127.0.0.1 与 ::1。本地页面和相机上传不走远端代理。
+Open [localhost:8765](http://localhost:8765), enable the camera, enter a task, and select **拍照并分析** (analyze a photo) or **开始流式观察** (start continuous observation). On macOS, you can also double-click `start.command`.
 
-在本项目目录运行 `./claude-surfshark.sh --continue` 可通过同一系统网络路径恢复 Claude 会话。项目 Claude 配置也清空了旧代理；旧入口 `claude-0dcloud.sh` 转到新入口。已运行的 Claude 和 AgentXR 需要重启后生效。这里不负责启动或检查 Surfshark，VPN 是否接管流量以 Surfshark 的连接状态和分流设置为准。
-
-Codex 认证继续使用原有登录。未指定模型时采用 Codex 配置模型，实际模型名在任务指标中返回；推理强度默认 medium，可选 medium/high。App Server 运行于临时目录、只读沙箱，关闭 shell 工具，拒绝需要客户端处理的工具/权限请求；不申请内部思维链。
-
-## 如何使用
-
-- 单次：点击「拍照并分析」，结果也会流式输出。
-- 持续：点击「开始流式观察」。默认每 1 秒采样一次，可选 0.5/2 秒；上传结束后等指定间隔再采样，不等待模型分析结束。
-- 在模型繁忙时，只保留最新一张待处理照片，替换过时照片。当前分析的一张不会因新帧到达而不断中断。
-- 页面显示已发送/被替换帧数、原始增量 JSON、可解析的活动与摘要、首字耗时、片段数、重连次数、CLI 就绪与远端阶段耗时。
-- 增量文本标为「尚未校验」；只有完整 JSON 校验通过，才更新标注框和任务进度。只推送 agentMessage 文本，不推送 reasoning 事件。
-- 目标和步骤可自定义。没有步骤时自由观察，不编造完成百分比。
-- 「停止流式观察」停止采集、清除待处理照片；当前分析继续。「取消分析」同时取消当前分析与待处理照片。关闭摄像头停止采集。
-- SSE 连接丢失会停止采样，浏览器自动重连并恢复最新任务快照；重连后需手动重新开启流式观察。
-- 历史保留最近 12 个成功结果，可回看、导出不含照片的 JSON。
-
-## 实现
-
-- `web/app.js`：getUserMedia、Canvas JPEG（宽度上限 1280px、质量 0.85）、独立采样循环、EventSource、帧 ID 对齐与可视化。
-- `server.py`：HTTP/SSE、单个活动任务 + 单个可替换待处理任务、严格结果验证、内存历史和状态管理。
-- `codex_rpc.py`：通过 stdin/stdout JSON-RPC 管理常驻 `codex app-server`；初始化、thread/start、turn/start、消息增量、token 用量、取消和崩溃恢复。
-- `contracts.py` / `observer_prompt.txt`：结构化契约与观察提示。
-- `temporal.py`：有意义动作帧选择、更新与过期策略。
-- `settings.json`：项目级代理地址。
-
-浏览器持续上传离散完整 JPEG，输出通过 SSE 推送。不是原生视频编码流，也不保证每个采样帧都会被模型分析。持续输入和增量输出可以同时进行；模型仍逐次处理所选照片。
-
-连续任务复用同一 Codex 进程与线程；每 8 个成功 turn 轮换线程，用已校验的上轮结果延续状态，避免无限积累图像上下文。取消、失败或超时后终止所属 app-server，下次请求自动重建；已校验的结果与动作参考图保留，不复用失败 turn 的线程状态。
-
-标注固定于对应的未镜像分析照片。实时画面不显示旧框。这是 2D XR 风格引导，不是三维锚点、SLAM 或实时物体追踪。
-
-## 网络诊断与修复依据
-
-之前真实 CLI 请求在约 2.46 秒就绪，随后发生五次重连，120 秒超时。后续对照测试发现直连 DNS 返回异常地址（chatgpt.com → Facebook 网段；api.openai.com → Twitter 网段）；用 HTTPS DNS 返回地址强制直连时，TLS 握手仍被重置。
-
-读取 macOS 网络配置文件发现 `127.0.0.1:17891` 本地代理。显式经该代理请求两个 OpenAI 接口，约 0.55 秒获得未认证 HTTP 401，验证了 TCP/TLS/HTTP 路径。401 是不携带凭据的连通性探测结果，不代表 Codex 登录失效。
-
-以上是旧代理的历史诊断。2026-11-13 切换 Surfshark 时，旧端口已拒绝连接；绕过旧代理访问 Anthropic 和 OpenAI 分别返回 HTTP 404 和 401，表明当时网络路径可达（不验证账号或模型调用）。项目现使用系统 VPN 路径，并清除子进程继承的旧代理。不要靠增加分析超时时间掩盖网络失败。
-
-## 数据与限制
-
-- 照片会发往 Codex 所用的模型服务，不是离线推理。
-- 本轮当前帧/参考帧临时文件在任务结束后删除；每个会话在 Python 内存中最多保留一张动作参考图（JPEG 最多 3 MB），最多 32 个会话。强制杀死整个 Python 进程可能留下临时文件。
-- 后端内存最多保留 40 个任务与 32 个会话状态；浏览器内存保留近期照片，刷新即丢失。
-- 低于 0.55 的自评置信度或画质差时，不新增完成步骤；置信度未经概率校准。
-- 远端阶段耗时混合了网络等待、服务排队与模型处理，无法仅从 CLI 事件精确拆分。
-- 为单用户本地研究原型，仅绑定 loopback，检查 Host/Origin，固定静态文件白名单，不支持公网部署。
-
-## 验证
+## Optional breadboard tools
 
 ```sh
-python3 -W error::ResourceWarning -m unittest discover -s tests -v
-node --check web/app.js
-node tests/test_frontend.cjs
-# 真实 CLI 图片测试（会实际调用模型，读取项目代理设置）
-python3 scripts/smoke_cli.py /path/to/photo.jpg
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-vision.txt
+.venv/bin/python server.py
 ```
 
-测试替身仅在 tests 中使用，覆盖代理环境传递、JSON-RPC、完成前的增量输出、进程与线程复用、最新帧替换、幂等、隔离、超时与取消；应用没有模拟结果开关。浏览器摄像头权限需要本人授权。
+Freeze a clear frame, calibrate the board, and confirm endpoints before checking connections. Model suggestions require human review; this is not fully automatic photo-to-netlist conversion. See the [breadboard guide](docs/BREADBOARD.md) for calibration and measurement instructions.
 
-接口参考：[OpenAI Codex App Server](https://learn.chatgpt.com/docs/app-server)。
+## Documentation
 
+- [Architecture](ARCHITECTURE.md)
+- [Breadboard workflow](docs/BREADBOARD.md)
+- Configuration: `settings.json` overrides defaults in `config.py`.
 
-## 意图推断与对应指导
+## Scope and data
 
-结果区分别展示可见行为、最多三个候选意图、可能尝试的下一操作、各自依据与验证信号。意图是待验证假设，候选置信度独立于画面行为判断的置信度。上下文可以支持假设，历史猜测本身不能作为新证据。
-
-- 有依据且候选较明确：给出一个可执行的小步骤与可观察验收标准。
-- 候选接近（前两项差距 < 0.15）、首项自评 < 0.65，或模型报告歧义：先确认目标，在目标栏补充后再观察。
-- 无依据或画面质量不足：提示补充目标、改善取景，不按猜测贸然指导。
-
-这些数值是保守的界面策略，不是统计校准的准确率阈值。意图推断不会自动将任务步骤标记完成。完整结果校验前，意图只出现在标记为尚未校验的流式输出区。
-
-本次升级需要重启 Python 服务后刷新网页。旧版服务不会被前端误认为支持意图推断。
-
-
-真实流式验证记录见 `diagnostics/stream-validation.json`：0.2 服务通过已配置代理处理 4,047 字节合成图像，约 6.47 秒首字、9.00 秒完成、144 个增量片段、0 次重连，SSE 在完成前已收到部分输出。这不是摄像头端到端验收，也不代表所有画面均有相同延迟。0.3 意图与指导已通过 16 项后端测试及前端状态测试，真实模型验证仍需重启加载新版。
-
-
-## 0.4 前后动作对照
-
-每次请求明确按时间顺序附上「上一有意义动作参考帧 → 当前帧」两张真实 JPEG，并携带各自帧 ID、采集时间、上次动作摘要。第一轮尚无参考图时，只发送当前帧建立基线。即使 Codex 线程轮换，动作参考图也会重新附上，不依赖模型隐式记住旧图片。
-
-`temporal` 输出报告 baseline / changed / unchanged / uncertain、可见前后变化、动作概括与自评置信度。光照或相机移动不作为任务动作。只有清晰画面、可靠行为判断、带变化依据且自评 ≥ 0.65 的动作变化，才更新参考图；静止、遮挡、模糊或不确定时保留上一动作参考图。首次清晰画面作为基线。
-
-参考图与当前采集时间相隔超过 5 分钟、时间倒序，或目标/步骤改变时不复用。任务会话相互隔离。此策略是原型的保守阈值，后续可按任务节奏调整。
-
-界面显示历史参考缩略图、参考动作、两帧时间间隔、变化依据及是否更新动作记忆；所有空间标注只对应当前帧。JSON 导出与调试视图不包含两张照片的编码。
-
-这仍然是稀疏关键帧分析，快速发生又消失、且从未进入分析的短暂动作可能遗漏；两张图不能证明完整连续轨迹。意图与指导根据实际可见变化更新，而不是把动作预测当作已完成步骤。
-
-0.4 已通过 22 项后端测试及前端状态测试，包括真实 RPC 请求中图片顺序/字节摘要核验、静止与不确定帧不覆盖动作记忆、线程轮换与取消后保留记忆、任务变更/过期隔离。新协议需重启后端后生效。
-
-
-## 0.5 连续预览与精细动作
-
-流式启动固定进入 live 视图，接收结果时保持当前视图；收到新分析不再清空上一条已校验指导。JPEG 使用异步 Canvas.toBlob 编码，摄像头请求 1920×1080 / 30fps（实际由设备决定）；支持的浏览器显示实测预览帧率。模型分析频率与摄像头预览帧率独立。动作高亮显示在带时间戳的分析照片上，不把旧框伪装成实时跟踪框；可点「查看标注大图」。
-
-`next_action` 明确描述一个原子操作：动词、对象、目标位置、必要前提、验收结果与多个角色高亮框。主界面优先显示动作。动作证据/定位不足时，撤回未验证的动作指令与精确目标框，转为需要补充细节或上下文。
-
-「框选细节」可在 live 图像上拖选一个区域。下一次采样从同一原生视频帧同时生成全景与高质量局部 JPEG，最多额外发送一张局部图（不做人工超分辨率）。参考动作图 + 当前全景 + 当前局部最多三张。模型可输出全景或局部坐标，后端将局部框转换到全景坐标；全部标注仍属于当前分析帧。相机或对象移动后需要重新框选。
-
-具体面包板孔位需要「接线说明 / 操作要求」以及可确认的行列/位置依据。未提供计划、看不清标记、定位自评不足或缺少目标孔框时不会输出 ready 孔位操作。模型坐标仍是视觉估计，没有进行相机标定或确定性孔网格检测，因此无法保证毫米级准确性。先用足够清晰的近景与已知接线图验证。
-
-细粒度动作默认使用 medium 推理强度；可以通过 --reasoning-effort low 恢复低延迟设置。提高推理强度不能替代缺失的图像细节或电路计划。
-
-
-## 0.6 异常诊断与主画面可视化
-
-点击「LED + 面包板：排查未点亮」设置目标，可在接线说明中补充实际电源电压、阻值和连接方式。后续每次判断会比较预期与观察结果：是否应当发光、照片中是否见到发光、供电是否得到确认、候选原因与验证方式，并只给当前最值得做的一步排查。
-
-未见发光不等于损坏；尚未通电的装配阶段不自动当作故障。模糊/遮挡时显示依据不足。照片不能代替电压、通断或阻值测量。明确与观察矛盾的完成步骤会重新标为待确认，但不抹掉已经完成的装配。
-
-实时主画面内新增「视觉指导」照片浮窗，可放大查看。绿色目标框来自已验证动作；橙色虚线是检查区域，不代表已经确认该处错误。无法精确识别孔位时，可显示可靠定位的 LED/接头/电源轨检查区域；无法定位时显示排查流程和文字，不伪造位置。浮窗标明采集时间，和持续播放的实时预览分开。流程节点的待核实状态不会被误画成已通过。
-
-诊断候选包括实际供电/输出开关、极性、回路/孔排/分段电源轨、接触、限流阻值/电压匹配，元件损坏仅作待排除的可能。接线修改需要已知计划与位置，移动接线前断电；不会建议取消限流电阻或猜测孔号。
-
-参考基础原理：[SparkFun LED 教程](https://learn.sparkfun.com/tutorials/light-emitting-diodes-leds)、[SparkFun 面包板连接说明](https://learn.sparkfun.com/tutorials/how-to-use-a-breadboard/)。这些是排查依据，不是对用户实际电路的诊断。
-
-新 schema/提示词需重启到 0.6 后生效；静态网页刷新即可更新布局，但旧后端不会被误认为支持新诊断。
-
-
-## 0.7 动作效果核验
-
-每轮明确回答“这个动作应改变什么状态？”和“当前观察是否支持这个变化？”。`action_effect` 记录动作、效果类型（物体状态/空间关系）、预期变化、实际观察、动作证据、效果证据、必要前提、可观察性、匹配结论及下一项核验。网页显示四列对照表和指导浮窗中的效果状态。
-
-- 建议动作通过现有空间/任务校验后，冻结 `next_action.instruction / expected_result / preconditions`，保存提出预期时的基线图、帧 ID、采集时间和发出时间。明确的诊断观察/测量检查也可建立预期。
-- 下一轮由 Codex 比较基线与当前图；服务端从已保存记录恢复动作和预期，不接受模型事后改写。待验证预期独立于上一有意义动作参考帧；两者不同才额外发送一张基线图。图片最多为动作参考、预期基线、当前全景、当前局部四张。
-- `matched`：动作与结果有证据支持；`mismatched`：动作发生且必要前提已确认，可见结果与预期矛盾；`pending`：尚未观察到动作或当前帧早于指导；`uncertain`：遮挡、低置信度、需测量、前提不明；`not_applicable`：尚无可核验动作。
-- 指导发出前已进入队列的照片不能验证该动作。未解决的预期保留，最多 300 秒；任务/接线要求改变后重新开始。自发动作可重建预期，但日志明确标注 `reconstructed`，不能称为提前预测。
-- 不匹配时优先显示已有诊断检查；无诊断时引导拍清差异。待验证状态不自动推进对应步骤，也不要求重复可能已经执行的操作。效果匹配不证明唯一因果，更不代表整项任务完成。
-- `effect_history` 保留每个会话最近 40 次核验，包含同一预期的多次观察、前后帧 ID、时间、前提与证据；每份完成结果携带当时的历史快照，现有“导出 JSON”一起导出。上下文只携带最近 4 条。记录不包含照片，服务重启清空；需要长期留存请导出。照片沿用内存/临时文件机制，未增加磁盘照片档案。
-
-参考 AEM 的 [动作效果描述生成](https://github.com/WenliangGuo/AEM/blob/master/data_preparation/egoper/gen_effect_desc.py)、[状态与关系效果模型](https://github.com/WenliangGuo/AEM/blob/master/libs/modeling/effect_model.py) 及 [数据准备说明](https://github.com/WenliangGuo/AEM/blob/master/data_preparation/README.md)。原项目从已有标注动作生成离线效果描述，并用视觉/图结构监督训练效果表示。这里是以 Codex 和显式记录实现的在线适配，没有安装 AEM 权重或复现其训练/检测模型；不要求提前生成完整步骤。
-
-启动 `start.command` 加载 0.7，刷新网页。新增行为由模拟 CLI 协议测试及前端 DOM 状态测试覆盖，真实电路识别质量仍需摄像头实测。
-
-
-## 0.8 当前检查对象的连续性
-
-修复“要求看清电池，用户举近电池后又要求看清 LED”的关注点切换：原先低画质诊断有硬编码 LED 补拍指令，未完成的动作效果核验又让位给异常诊断，部分补拍请求没有保存。现将信息收集与物理动作效果核验分开。
-
-`inspection.proposal` 指定本轮要展示的对象、问题和最多四项所需信息。服务端生成与实际 guidance 一致的 `inspection_request`（ID、对象、问题、字段、发出时间、已获得信息），下一轮明确传入 Codex。`inspection.response` 按请求 ID、原始对象名、原始字段名返回当前目标的清晰度、读数/描述、可见证据及可选 bbox。
-
-- 当前请求未解决时，信息检查拥有最终 guidance 控制权；全局诊断与意图不能改为检查另一物体。后端同时同步 next_action、diagnostics.check、摘要和标注。
-- 全局画面可能看不见 LED，但电池标签可读；使用目标自己的 quality/confidence。没有证据、错误请求 ID/对象、过低置信度、请求之前采集的照片不会作为已回答信息。
-- 逐项保存信息，部分完成只请求缺项；全部完成先回显取得的信息，要求恢复整体取景，后续再继续电路诊断。读取标签不证明实际输出电压、导通或 LED 点亮，也不要求证明举起物体的完整运动。
-- 请求期间不推进或撤销无关步骤，不覆盖原物理动作的待验证预期，也不把近景替换成全局动作参考图。线程轮换仍保留检查状态。新任务/修改目标或接线说明重置状态。
-- 文本请求在同一任务内保留到完成或重置；暂停不会悄悄换检查目标。最近 24 条带时间、来源帧的已获取信息传入后续上下文，最近 40 条信息核验记录随 JSON 导出。历史读数不自动代表当前状态；仍需模型识别物体更换或证据冲突。
-- 网页突出“当前检查对象／已读到什么／还缺什么”，期间隐藏全局异常面板，只画当前检查对象的可信框，不能退回到 LED 框。debug `metrics.guidance_owner`、`inspection_state`、`inspection_history` 可定位指导来源。
-
-请求识别和文字读取仍由 Codex 完成，结构化约束不能保证视觉识别本身正确。回归测试使用模拟 CLI 和 DOM，并覆盖电池部分信息→完整信息→恢复全局分析的序列；未声称完成真实摄像头验证。请重启 `start.command` 加载 0.8，刷新页面并开始新任务。
-
-
-## 0.9 复用任务场景与已取得信息
-
-移除 0.8 在每次信息检查完成后强制追加的“恢复整体操作区域取景”。检查完成只确认取得的信息，后续判断结合已有任务画面；提示词要求只有影响下一步的具体证据缺口才请求补拍，不使用“整体画面/所有细节”作为笼统验收字段。
-
-新增独立 `scene_memory`：保存同一任务最近一张合格任务视图的图片、摘要、证据、步骤与诊断。模型用 `scene_scope=task_view/detail/uncertain` 标注当前图覆盖范围；近景、低置信度、低质量不能替换任务视图。它独立于 300 秒有效期的动作对照，不会仅因时间经过而丢失。历史画面永远带 `captured_at/age_seconds/historical_only`，不自动证明现在仍然接线正确或通电。
-
-每轮上下文明确提供 `task_scene_memory`，并实际附带其图像；与动作参考/预期基线是同一帧则复用同一图片，不重复发送。线程轮换后仍提供它。最大图片数变为任务场景、动作参考、预期基线、当前图、当前裁剪五张；通常其中的历史图重合。`scene_context` 和 `metrics.scene_memory_image_bytes` 可核验本轮使用的历史来源。
-
-若新的检查请求与已记录对象、字段一致，且 `inspection.proposal.recheck_reason` 为空，后端展示原始历史信息（`inspection_state.status=remembered`），不再次要求拍摄，不将历史读数冒充当前测量结果。需要再次检查时必须给出具体原因，例如物体更换、当前反证或必须确认现在的开关/接触状态。匹配使用确切对象与字段名，语义改写仍依赖模型遵循上下文；不保证所有重复提问都能被自动识别。
-
-网页显示本轮实际传入的任务记忆帧 ID、年龄、摘要以及带来源的已取得信息。数据仍仅保存在服务会话内：新任务、改变任务要求、刷新页面产生新会话或服务重启会重置；这是运行时记忆，未增加磁盘持久化。
-
-需要重启 `start.command` 加载 0.9 并刷新页面。测试覆盖超过 5 分钟且线程轮换后仍发送历史任务图、近景不覆盖场景、已知字段复用及带原因的复核；真实模型对新提示词的遵循程度仍需摄像头实测。
-
-
-## 0.10 延迟优化与测量
-
-默认 `settings.json` 使用 `reasoning_effort: "low"`、`fast_inspection: true`，仍沿用原 Codex 模型，不改用户全局配置、不自动开启更高费用的服务档位。可用 `--reasoning-effort medium` 恢复完整判断的推理强度，或 `--full-inspection` 禁用精简读取以作比较。
-
-已有指定对象检查请求时，走 `inspection-fast`：只附当前全景与可选同帧裁剪，只输出 `inspection.response`（字段读数、可见证据、目标清晰度、最多一个目标框）。不重新生成意图、诊断原因、步骤、动作效果等完整结构。适配层明确这些部分“本轮未判断”，原检查状态机继续验证请求 ID、字段、证据、清晰度与置信度。历史任务图、已取得信息、待验证物理动作仍在会话中保存，恢复完整判断时继续传入；精简读取不会上传这些不相关图片。任务通道仍执行完整诊断与精确动作校验。
-
-两类通道各自使用匹配的线程提示词；切换通道时轮换线程，已验证记忆显式传入。提示词放在 thread/start 的 developerInstructions 中，不再每轮复制到用户输入。CLI 进程保持复用。默认低推理强度可能影响复杂判断质量，需用真实操作评估，不能将单元测试当作识别准确率保证。
-
-调试指标新增 `analysis_lane`、`context_chars`、`schema_chars`、`output_chars`、`image_count`、`capture_to_result_ms`、`within_2s`。网页显示实际采集到完整结果的时间，流式首字不等于完整判断完成。
-
-真实当前基线见 `diagnostics/latency-baseline-0.8.json`：0.8、gpt-6-astra、medium、4047 字节合成图，CLI 启动 98 ms，首字 7121 ms，总计 17689 ms，无重连。该样本不是电路摄像头测评，也不是新通道的速度。
-
-在 Mac 终端测新通道（不需要 HTTP 服务，也不保存照片）：
-
-```bash
-python3 scripts/benchmark_latency.py /path/to/photo.jpg --target 电池 --field 标称电压 --runs 3 --output diagnostics/reading-latency.json
-```
-
-比较完整通道可添加 `--full --reasoning-effort medium`。脚本输出每次真实 CLI 的首字、完成时间、p50/p95 和 2 秒内完成比例。三次采样仅用于初步评估，不能建立性能保证。当前编辑环境无法启动真实 Codex 子进程，尚未取得新版远端延迟数据，不能宣称已达到 1–2 秒。
-
-官方参考：[减少输出 token 等延迟优化原则](https://developers.openai.com/api/docs/guides/latency-optimization)、[Codex Speed](https://learn.chatgpt.com/docs/agent-configuration/speed)。Fast/Ultrafast 的权限与用量不同，未自动启用。
+AgentXR is a local research prototype with 2D annotations. It analyzes selected frames, not every video frame. Photos are sent to the model service used by Codex; sessions and images are saved locally by default. Circuit checks depend on the board profile and confirmed inputs, and require physical verification.
