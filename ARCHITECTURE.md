@@ -1,6 +1,6 @@
 # AgentXR 架构说明
 
-**版本 0.14.0** · 文档最近一次随代码更新：2026-11-13 14:25:35 · 位置：`/Users/dase_mac2024/Downloads/agentxr/ARCHITECTURE.md`
+**版本 0.14.0** · 文档最近一次随代码更新：2026-11-14 19:27:03 · 位置：`/Users/dase_mac2024/Downloads/agentxr/ARCHITECTURE.md`
 
 > 本文件由 `scripts/update_docs.py` 根据 `docs/ARCHITECTURE.template.md` 和当前代码自动生成，**不要直接编辑 ARCHITECTURE.md**。
 > 叙述部分在模板里改；标有「自动生成」的小节直接从代码抽取，代码一变就会跟着变。
@@ -35,7 +35,7 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
                                 │
                                 └─ 完整通道 _run_full ─────────────────▶ 复用线程（有轮数上限）
                                     挑选图片：上一个有效动作 / 预期基线 /             大格式 SCHEMA
-                                    历史任务全景 / 当前图 / 局部裁剪                  （或信息读取用 FAST_SCHEMA）
+                                    历史任务全景 / 当前图 / 局部裁剪                  （每张照片一次完整分析）
                                     ◀─ 流式 JSON ───────────────────────────────
                                     后处理规则链（见下方自动生成的顺序）
                                     写入会话存储
@@ -46,7 +46,7 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
 
 按源码中的调用顺序列出各通道调用的规则函数（只列项目自己的模块函数）。
 
-- **完整通道 `Engine._run_full`**：`crop.jpeg_size()` → `temporal.select_reference()` → `effects.select_expectation()` → `inspection.select_inspection()` → `inspection.release_inspection()` → `scene_memory.select_scene()` → `crop.jpeg_size()` → `scene_memory.scene_context()` → `effects.public_expectation()` → `scene_memory.scene_context()` → `brief.brief_for_frames()` → `ask.context()` → `fast_inspection.expand_response()` → `inspection.reconcile_inspection()` → `inspection.release_inspection()` → `fast_inspection.expand_response()` → `server.normalize()` → `temporal.reconcile_temporal()` → `actions.reconcile_action()` → `diagnostics.reconcile_diagnostics()` → `scene_memory.remember_scene()` → `inspection.inspection_candidate()` → `effects.reconcile_effect()` → `inspection.reconcile_inspection()` → `effects.record_effect()` → `effects.remember_expectation()` → `temporal.remember()` → `ask.decide()` → `ask.apply()` → `visual.reconcile_cues()` → `visual.ensure_move_cue()` → `visual.reconcile_overview()` → `visual.plan_from_overview()` → `effects.public_expectation()` → `ask.commit()` → `ask.public()`
+- **完整通道 `Engine._run_full`**：`image_metadata.jpeg_size()` → `temporal.select_reference()` → `effects.select_expectation()` → `inspection.select_inspection()` → `inspection.release_inspection()` → `scene_memory.select_scene()` → `image_metadata.jpeg_size()` → `scene_memory.scene_context()` → `effects.public_expectation()` → `scene_memory.scene_context()` → `brief.brief_for_frames()` → `ask.context()` → `server.normalize()` → `temporal.reconcile_temporal()` → `actions.reconcile_action()` → `diagnostics.reconcile_diagnostics()` → `scene_memory.remember_scene()` → `inspection.inspection_candidate()` → `effects.reconcile_effect()` → `inspection.reconcile_inspection()` → `effects.record_effect()` → `effects.remember_expectation()` → `temporal.remember()` → `ask.decide()` → `ask.apply()` → `visual.reconcile_cues()` → `visual.ensure_move_cue()` → `visual.reconcile_overview()` → `visual.plan_from_overview()` → `effects.public_expectation()` → `ask.commit()` → `ask.public()`
 - **快速通道 `Engine._run_guide`**：`brief.brief_for_frames()` → `guide.guide_context()` → `local_vlm.compact_context()` → `local_vlm.expand_local()` → `guide.reconcile_guide()` → `ask.commit()` → `ask.public()` → `visual.plan_from_overview()`
 - **快速通道核对 `guide.reconcile_guide`**：`contracts.validate()` → `contracts.check_boxes()` → `actions.project_targets()` → `ask.decide()` → `ask.apply()` → `visual.reconcile_cues()` → `visual.reconcile_overview()`
 
@@ -57,18 +57,18 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
 | **任务理解** | 只读你填的文字（不看图），输出目标、步骤与完成标志、具体要求、缺失信息、安全前提和开拍前的第一步 | `brief.py` 与 `Engine.request_brief()`：输入停顿约 1 秒后经 `PATCH /api/sessions/{id}` 触发；在独立的 Codex 进程上运行，新文字取代旧文字，相同文字不重复解析；`reconcile_brief()` 保证你填的目标和步骤原样保留；结果存入会话；文字变化后旧结果不再使用；没填步骤时 `plan_from_brief()` 生成草稿计划 |
 | **双通道（快速通道默认关闭）** | 完整通道：Codex；快速通道可选（Codex 或本地 Qwen） | `server.py`：只处理最新帧；同一时间只允许一个页面使用；快速通道每轮开新线程（状态由代码显式提供），完整通道达到 `threads.full_max_turns` 后换线程，限制图片上下文长度 |
 | **意图推断** | 最多 3 个候选意图，附可信度和依据 | `normalize()`：删除没有依据的候选；第一名低于 `intent_min_confidence` 或前两名相差不到 `intent_margin` 时标为「有歧义」，并把候选转成一个问题交给提问规则 |
-| **下一步指引** | 动词、对象、目标位置、前提条件和验收标准 | `reconcile_action()`：可信度不足、没有定位框或画面差时降级为「先补充细节」；需要精确到孔位时，必须有计划和可读标记，否则降级为「先确认」 |
-| **箭头与动画** | 箭头、旋转、按压、插拔等示意的坐标；对象框与目标位置框 | `reconcile_cues()`：模型定位了对象和目标位置却没画箭头时，`ensure_move_cue()` 自动补一条对象→目标的箭头；只在「去做」类指引、画面可用、可信度和长度都达标时绘制，数量有上限；局部裁剪的坐标换算回全景；动画由 `web/cues.js` 实现 |
+| **下一步指引** | 动词、对象、目标位置、前提条件和验收标准 | `reconcile_action()`：可信度不足、没有定位框或画面差时降级为「先补充细节」；精细定位可依据可读标记或明确的相对位置，不强制填写计划；只有依据声称来自文字计划时才要求该计划存在 |
+| **箭头与动画** | 箭头、旋转、按压、插拔等示意的坐标；对象框与目标位置框 | `reconcile_cues()`：模型定位了对象和目标位置却没画箭头时，`ensure_move_cue()` 自动补一条对象→目标的箭头；只在「去做」类指引、画面可用、可信度和长度都达标时绘制，数量有上限；局部裁剪的坐标换算回全景；动画由 `web/cues.js` 实现；操作图查看器将高清照片、目标框、箭头放在同一缩放层，支持滚轮、双指、按钮缩放与拖动 |
 | **步骤总览** | 你没给步骤时推断 3 到 8 步的计划 | `reconcile_overview()`：你给的步骤一字不改；已建立的计划不能随意改写；快速通道不能把步骤标成完成，完整通道要有可见证据才能标 |
 | **前后对比** | 比较「之前」和「现在」两张图 | `select_reference()` 挑参考图，`reconcile_temporal()`：没有参考图时强制标为基线；可信度不足或没有写出具体变化时标为不确定 |
-| **动作效果核验** | 判断上一步的预期结果有没有出现 | `reconcile_effect()`：发出指引时冻结预期结果，模型之后不能改写；照片早于指引时只能是「待定」；没看到动作发生不能判失败；判为不符时自动把指引改成「核对结果」 |
+| **动作效果核验** | 判断上一步的预期结果有没有出现 | `reconcile_effect()`：发出指引时冻结预期结果，模型之后不能改写；照片早于指引时只能是「待定」；没看到动作发生不能判失败；保留当前已有定位依据的下一步，不因旧动作尚未核验而强制覆盖成核对；仍将未确认效果如实记入历史 |
 | **故障诊断** | 可能原因与一个检查步骤 | `reconcile_diagnostics()`：要改动物理连接的检查，必须满足领域插件规定的前提（如先断电） |
-| **信息检查** | 提出需要的信息，从画面读出数值，并给出目标所在区域 | `reconcile_inspection()` 与 `fast_inspection.py`：未完成的检查请求优先于其他指引；读取时改用只读这项信息的小格式，不上传历史图。专用读取轮的回答直接归属当前请求（不要求模型回填编号），字段名由 `match_field()` 宽松匹配；读到的信息记为「已知事实」并跨帧累积。**先放大再要求**：浏览器另传一份全分辨率照片供裁剪与必要时恢复整体诊断，服务端用 `crop.py` 在上次定位到的区域裁剪后再读；仍缺且模型给出了区域时，立即裁剪重读一次。专用读取无新增字段时，在同一帧切到完整任务 schema，携带已确认事实与未决信息，并使用已有高分辨率全景（若有）；冷却期内不重复锁定同一检查。全景与裁剪的有效事实合并保留，原始响应保存在 metrics.inspection_readings。`inspection_max_attempts` 保留为其他检查路径的退出上限 |
+| **信息检查** | 在完整画面诊断中补充读取未知项 | `inspection.py` 仅记录带来源的事实与未决信息，不覆盖摘要、诊断或指导。历史全景和用户已知事实始终可用于完整分析，不再自动放大复读或切换检查专用线程。 |
 | **场景记忆** | 判断当前画面是任务全景还是近景 | `remember_scene()`：只保存一张任务全景，近景不会替换它 |
 | **提问还是直接做** | 总是给出按最可能理解的一步，并可附一个问题，标出猜对概率、猜错代价、能否撤回 | `ask.py` 的 `decide()`：P(猜错) × 猜错代价 > 打扰代价时才打断；猜错概率按本会话你的回答在线修正；10 分钟内回答过的话题不再问；涉及安全的问题必问；不重要的缺口改为可选卡片 |
 | **回答与反馈** | 下一帧在上下文里看到你的回答和反馈 | `POST /api/sessions/{id}/feedback` → `record()` 校验后入库；回答后立即重新分析 |
 | **会话与记忆侧栏** | — | `store.py`：存放在 `storage.dir` 下，每个会话一个目录（session.json 与 images/）；可列出、恢复、继承所选部分、逐条删除 |
-| **领域插件** | 按插件提示词行事 | `domains/*.json`：按关键词自动加载，提供额外提示词、孔位提示、改动前提、读取轮规则（inspection_prompt，如电子电路只问相对关系不读孔号）和重新取景提示（inspection_hint）；核心代码与领域无关 |
+| **领域插件** | 按插件提示词行事 | `domains/*.json`：按关键词自动加载，提供额外提示词、孔位提示、改动前提；核心代码与领域无关 |
 
 ## 四、写死在代码里的部分
 
@@ -93,31 +93,31 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
 | `brief.py` | 80 | Task understanding: a text-only Codex turn that reads what the user typed (goal / notes / steps) |
 | `circuit.py` | 337 | Deterministic circuit rules on top of breadboard.evidence(): is this a working loop, and |
 | `codex_rpc.py` | 140 | Persistent Codex app-server JSON-RPC transport. No shell or credential handling. |
-| `config.py` | 128 | All tunable policy numbers in one place; settings.json may override any key. |
-| `contracts.py` | 214 |  |
-| `crop.py` | 66 | Server-side zoom: crop the full-resolution camera frame before asking the user to move. |
-| `diagnostics.py` | 72 | Keep fault hypotheses separate from visible evidence and choose one check. |
-| `domains.py` | 58 | Optional domain plug-ins. Core prompts and code stay task-agnostic. |
-| `effects.py` | 102 | Action-effect evidence records. Expectations are frozen before later observation. |
-| `fast_inspection.py` | 31 | Small visual-reading contract; task planning stays in the full observer. |
-| `guide.py` | 111 | Quick guidance lane: a small contract streamed per frame while the full audit runs behind it. |
-| `inspection.py` | 215 | Collect requested information before resuming whole-task diagnosis. |
+| `config.py` | 127 | All tunable policy numbers in one place; settings.json may override any key. |
+| `contracts.py` | 218 |  |
+| `diagnostics.py` | 82 | Keep fault hypotheses separate from visible evidence and choose one check. |
+| `domains.py` | 55 | Optional domain plug-ins. Core prompts and code stay task-agnostic. |
+| `effects.py` | 104 | Action-effect evidence records. Expectations are frozen before later observation. |
+| `guide.py` | 103 | Quick guidance lane: a small contract streamed per frame while the full audit runs behind it. |
+| `image_metadata.py` | 21 | Read JPEG dimensions without decoding or modifying the image. |
+| `inspection.py` | 130 | Record supplementary observations without taking over whole-task diagnosis. |
 | `local_vlm.py` | 194 | Local fast model (Qwen-VL via Ollama) for the quick guidance lane. |
+| `network_route.py` | 86 | Select a proxy for child processes without changing macOS or VPN settings. |
 | `scene_memory.py` | 25 | One historical task view, independent of short-lived temporal comparisons. |
-| `server.py` | 1433 | Continuous latest-frame input and SSE output, backed by persistent Codex. |
-| `store.py` | 228 | On-disk session memory: list / resume / inherit / delete, like a chat sidebar. |
+| `server.py` | 1368 | Continuous latest-frame input and SSE output, backed by persistent Codex. |
+| `store.py` | 246 | On-disk session memory: list / resume / inherit / delete, like a chat sidebar. |
 | `temporal.py` | 32 | Bounded visual action memory, independent of Codex thread history. |
 | `visual.py` | 149 | Validate animated cues and the task overview shared by both analysis lanes. |
-| `web/app.js` | 815 |  |
+| `web/app.js` | 917 |  |
 | `web/board.js` | 187 |  |
-| `web/cues.js` | 115 |  |
-| `web/index.html` | 123 |  |
-| `web/style.css` | 96 |  |
-| `scripts/benchmark_latency.py` | 89 | Real CLI timing; no simulated results. |
+| `web/cues.js` | 116 |  |
+| `web/index.html` | 128 |  |
+| `web/style.css` | 112 |  |
+| `scripts/benchmark_latency.py` | 77 | Real CLI timing; no simulated results. |
 | `scripts/make_board_markers.py` | 31 | Print-at-100% ArUco registration sheet. Board placement must be verified manually. |
 | `scripts/smoke_cli.py` | 28 | Run a real CLI image request; no simulated response. |
-| `scripts/update_docs.py` | 367 | Regenerate ARCHITECTURE.md from docs/ARCHITECTURE.template.md plus facts read from the code. |
-| `observer_prompt.txt` | 53 |  |
+| `scripts/update_docs.py` | 366 | Regenerate ARCHITECTURE.md from docs/ARCHITECTURE.template.md plus facts read from the code. |
+| `observer_prompt.txt` | 56 |  |
 
 ### Codex 输出格式（自动生成）
 
@@ -125,7 +125,6 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
 
 - **完整通道 `contracts.SCHEMA`**（20 个顶层字段）：`guidance`（mode, title, instruction, check）；`question`（topic, text, options, default_option, p_default, cost_if_wrong, reversible, observable_later）；`task_overview`（goal, goal_confidence, steps, current_step_index, plan_revision_reason）；`visual_cues`（type, label, tool, coordinate_space, x1, y1, x2, y2, radius, direction, turns, confidence）；`next_action`（status, verb, object, instruction, expected_result, precision, confidence, location_label, location_basis, location_evidence, preconditions, missing_information, targets）；`overlays`（label, kind, x, y, width, height）；`phase`；`steps`（title, status, evidence）；`activity`；`summary`；`quality`；`confidence`；`scene_scope`；`evidence`；`uncertainties`；`intent`（status, candidates, clarification）；`temporal`（state, action, changes, confidence）；`action_effect`（source, action, effect_type, expected_change, actual_observation, action_status, action_evidence, outcome_evidence, prerequisites, observability, verdict, confidence, affected_steps, verification）；`inspection`（proposal, response）；`diagnostics`（status, expected, observed, state_checks, evidence, failed_steps, causes, check, regions）
 - **快速通道 `guide.GUIDE_SCHEMA`**（8 个顶层字段）：`guidance`（mode, title, instruction, check, precision, location_basis）；`question`（topic, text, options, default_option, p_default, cost_if_wrong, reversible, observable_later）；`task_overview`（goal, goal_confidence, steps, current_step_index, plan_revision_reason）；`visual_cues`（type, label, tool, coordinate_space, x1, y1, x2, y2, radius, direction, turns, confidence）；`targets`（role, label, coordinate_space, x, y, width, height, confidence）；`activity`；`quality`；`confidence`
-- **信息读取 `fast_inspection.FAST_SCHEMA`**（7 个顶层字段）：`request_id`；`target`；`quality`；`status`；`confidence`；`findings`（field, value, evidence）；`regions`（role, label, coordinate_space, x, y, width, height, confidence）
 
 ### 可调参数与写死的阈值（自动生成）
 
@@ -152,12 +151,11 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
 | `memory.inspection_records` | `40` |  |
 | `memory.inspection_max_attempts` | `4` |  |
 | `memory.inspection_retry_cooldown_seconds` | `60` |  |
-| `memory.inspection_region_seconds` | `20` |  |
 | `memory.inspection_context_records` | `3` |  |
 | `memory.guide_context_facts` | `8` |  |
 | `memory.sessions_in_ram` | `32` |  |
 | `memory.jobs_in_ram` | `40` |  |
-| `memory.saved_records` | `24` |  |
+| `memory.saved_records` | `0` |  |
 | `threads.full_max_turns` | `8` |  |
 | `threads.guide_max_turns` | `1` |  |
 | `images.current_max_width` | `768` |  |
@@ -174,8 +172,8 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
 | `lanes.guide_local_max_tokens` | `600` |  |
 | `lanes.guide_reasoning_effort` | `"low"` |  |
 | `lanes.brief_reasoning_effort` | `"low"` |  |
-| `lanes.inspection_reasoning_effort` | `"low"` |  |
 | `lanes.base_instructions` | `"你是图像观察与操作引导助手。只根据附带图片和上下文 JSON 回答，严格按要求的 JSON schema 输出，不调用任何工具。"` |  |
+| `codex.transport` | `"http"` |  |
 | `codex.disable_features` | `["apps", "browser_use", "browser_use_external", "computer_use", "image_generation", "mu…` |  |
 | `storage.dir` | `"~/.agentxr/sessions"` |  |
 | `storage.persist_images` | `true` |  |
@@ -194,14 +192,14 @@ Codex 由 `codex_rpc.py` 以 `codex app-server --listen stdio://` 常驻启动�
 | `asking.answers_kept` | `40` |  |
 | `asking.answers_in_context` | `6` |  |
 
-settings.json 中还有这些服务器启动参数：`fast_inspection`、`proxy`、`reasoning_effort`
+settings.json 中还有这些服务器启动参数：`proxy`、`reasoning_effort`
 
 ### HTTP 接口与能力（自动生成）
 
 - 服务端版本：`0.14.0`
 - 固定路径：`/api/analyze`、`/api/breadboard/profiles`、`/api/breadboard/read`、`/api/breadboard/rectify`、`/api/cancel`、`/api/domains`、`/api/events`、`/api/health`、`/api/jobs/`、`/api/sessions`
 - 会话子路径 `/api/sessions/{id}/…`：`feedback`、`images`、`memory`、`records`
-- `/api/health` 声明的能力：`intent-guidance`、`temporal-action-memory`、`precise-actions`、`visual-diagnostics`、`action-effect-records`、`inspection-focus`、`task-scene-memory`、`fast-inspection`、`guide-lane`、`visual-cues`、`task-overview`、`session-store`、`domains`、`ask-gate`、`user-feedback`、`task-brief`、`auto-zoom`、`local-guide`、`board-circuit`、`board-read`
+- `/api/health` 声明的能力：`intent-guidance`、`temporal-action-memory`、`precise-actions`、`visual-diagnostics`、`action-effect-records`、`inspection-focus`、`task-scene-memory`、`guide-lane`、`visual-cues`、`task-overview`、`session-store`、`domains`、`ask-gate`、`user-feedback`、`task-brief`、`local-guide`、`board-circuit`、`board-read`
 
 ### 领域插件（自动生成）
 
@@ -213,16 +211,20 @@ settings.json 中还有这些服务器启动参数：`fast_inspection`、`proxy`
 - `tests/test_board_reader.py`：5 个测试函数
 - `tests/test_breadboard.py`：18 个测试函数
 - `tests/test_circuit.py`：10 个测试函数
-- `tests/test_effects.py`：11 个测试函数
-- `tests/test_fast_inspection.py`：2 个测试函数
-- `tests/test_inspection.py`：17 个测试函数
-- `tests/test_lanes.py`：20 个测试函数
+- `tests/test_direct_guidance.py`：3 个测试函数
+- `tests/test_effects.py`：12 个测试函数
+- `tests/test_inspection.py`：9 个测试函数
+- `tests/test_lanes.py`：16 个测试函数
+- `tests/test_network_route.py`：7 个测试函数
+- `tests/test_photo_history.py`：2 个测试函数
 - `tests/test_scene_memory.py`：4 个测试函数
-- `tests/test_server.py`：37 个测试函数
+- `tests/test_server.py`：40 个测试函数
 - `tests/test_visual.py`：8 个测试函数
 - `tests/test_board_frontend.cjs`：前端测试（`node tests/test_board_frontend.cjs`）
+- `tests/test_capture_flow.cjs`：前端测试（`node tests/test_capture_flow.cjs`）
 - `tests/test_frontend.cjs`：前端测试（`node tests/test_frontend.cjs`）
-- 合计 147 个 Python 测试函数；运行：`python3 -W error::ResourceWarning -m unittest discover -s tests`
+- `tests/test_photo_viewer.cjs`：前端测试（`node tests/test_photo_viewer.cjs`）
+- 合计 149 个 Python 测试函数；运行：`python3 -W error::ResourceWarning -m unittest discover -s tests`
 
 ### 过时引用检查（自动生成）
 
@@ -232,36 +234,36 @@ settings.json 中还有这些服务器启动参数：`fast_inspection`、`proxy`
 
 每次检测到被跟踪文件变化时记一条（最近 30 条，新的在前）。
 
-- 2026-11-13 14:25:35：修改 `README.md`
-- 2026-11-13 13:58:08：修改 `docs/ARCHITECTURE.template.md`
-- 2026-11-13 13:58:08：修改 `README.md`
-- 2026-11-13 13:54:06：修改 `tests/test_frontend.cjs`
-- 2026-11-13 13:53:47：修改 `start.command`
-- 2026-11-13 13:53:47：修改 `observer_prompt.txt`
-- 2026-11-13 13:53:47：修改 `web/style.css`
-- 2026-11-13 13:53:47：修改 `web/app.js`
-- 2026-11-13 13:53:46：修改 `web/index.html`
-- 2026-11-13 13:53:46：修改 `web/index.html`
-- 2026-11-13 13:53:46：修改 `web/board.js`
-- 2026-11-13 13:51:34：修改 `board_reader.py`
-- 2026-11-13 13:51:34：修改 `board_reader.py`
-- 2026-11-13 13:51:20：新增 `tests/test_board_reader.py`
-- 2026-11-13 13:50:54：修改 `tests/fake_app_server.py`
-- 2026-11-13 13:50:54：修改 `server.py`
-- 2026-11-13 13:50:54：修改 `server.py`
-- 2026-11-13 13:50:54：修改 `server.py`
-- 2026-11-13 13:50:54：修改 `server.py`
-- 2026-11-13 13:50:53：修改 `server.py`
-- 2026-11-13 13:50:53：新增 `board_reader.py`
-- 2026-11-13 13:49:07：修改 `breadboard.py`
-- 2026-11-13 13:48:36：修改 `tests/test_circuit.py`
-- 2026-11-13 13:48:36：修改 `circuit.py`
-- 2026-11-13 13:48:20：修改 `tests/test_circuit.py`
-- 2026-11-13 13:48:09：修改 `circuit.py`
-- 2026-11-13 13:48:09：修改 `circuit.py`
-- 2026-11-13 13:47:49：新增 `tests/test_circuit.py`
-- 2026-11-13 13:47:49：修改 `breadboard.py`
-- 2026-11-13 13:47:13：新增 `circuit.py`
+- 2026-11-14 19:27:03：修改 `image_metadata.py`
+- 2026-11-14 17:41:39：修改 `tests/test_photo_viewer.cjs`
+- 2026-11-14 17:41:21：修改 `web/app.js`、`web/cues.js`、`web/style.css`
+- 2026-11-14 16:49:33：修改 `actions.py`
+- 2026-11-14 16:48:40：修改 `README.md`、`docs/ARCHITECTURE.template.md`、`guide.py`、`observer_prompt.txt`
+- 2026-11-14 16:47:21：新增 `tests/test_photo_viewer.cjs`
+- 2026-11-14 16:46:45：新增 `tests/test_direct_guidance.py`；修改 `tests/test_effects.py`、`tests/test_server.py`
+- 2026-11-14 16:45:50：修改 `web/app.js`、`web/style.css`
+- 2026-11-14 16:45:08：修改 `web/app.js`、`web/index.html`
+- 2026-11-14 16:44:36：修改 `domains/electronics.json`、`effects.py`
+- 2026-11-14 16:44:09：修改 `actions.py`、`diagnostics.py`、`guide.py`、`observer_prompt.txt`
+- 2026-11-14 16:32:47：修改 `tests/test_board_frontend.cjs`
+- 2026-11-14 16:32:28：修改 `README.md`、`scripts/update_docs.py`、`tests/test_board_frontend.cjs`、`tests/test_frontend.cjs`、`web/app.js`
+- 2026-11-14 16:28:43：修改 `docs/ARCHITECTURE.template.md`、`domains.py`、`server.py`、`tests/fake_app_server.py`
+- 2026-11-14 16:27:55：修改 `config.py`、`docs/ARCHITECTURE.template.md`、`domains/electronics.json`、`guide.py`、`settings.json`、`tests/test_inspection.py`
+- 2026-11-14 16:27:11：修改 `domains/electronics.json`、`observer_prompt.txt`、`tests/test_lanes.py`、`tests/test_server.py`、`web/app.js`
+- 2026-11-14 16:26:31：修改 `actions.py`、`inspection.py`、`observer_prompt.txt`
+- 2026-11-14 16:25:52：新增 `image_metadata.py`；修改 `breadboard.py`、`scripts/benchmark_latency.py`、`scripts/update_docs.py`、`server.py`、`settings.json`；删除 `crop.py`、`fast_inspection.py`、`tests/test_fast_inspection.py`
+- 2026-11-14 16:16:46：修改 `README.md`
+- 2026-11-14 16:16:36：修改 `tests/test_capture_flow.cjs`
+- 2026-11-14 16:15:38：修改 `tests/test_lanes.py`
+- 2026-11-14 16:15:13：新增 `tests/test_photo_history.py`；修改 `tests/test_lanes.py`
+- 2026-11-14 16:14:45：修改 `observer_prompt.txt`、`web/app.js`
+- 2026-11-14 16:14:13：修改 `config.py`、`contracts.py`、`server.py`、`store.py`
+- 2026-11-14 16:10:16：修改 `README.md`、`codex_rpc.py`、`config.py`、`server.py`
+- 2026-11-14 16:08:31：修改 `server.py`、`tests/test_lanes.py`
+- 2026-11-14 16:07:57：修改 `tests/fake_app_server.py`
+- 2026-11-14 00:59:07：修改 `README.md`
+- 2026-11-14 00:58:27：新增 `tests/test_network_route.py`
+- 2026-11-14 00:57:23：新增 `network_route.py`；修改 `codex_rpc.py`、`config.py`、`server.py`、`settings.json`、`start.command`、`web/app.js`
 
 ## 面包板几何路径
 

@@ -1,4 +1,4 @@
-import base64, json, tempfile, time, unittest, copy
+import base64, json, tempfile, time, unittest, copy, hashlib
 from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -50,6 +50,18 @@ class LaneTests(unittest.TestCase):
         self.wait(self.engine.submit(payload('order-1')))
         full=[r for r in self.requests() if 'diagnostics' in r['schema_keys']][0]
         self.assertEqual(full['schema_keys'][:4],['guidance','question','task_overview','visual_cues'])
+    def test_selected_old_photo_is_sent_as_history_not_action_baseline(self):
+        task={'goal':'准备工作','steps':['摆放笔记本'],'plan':'','domain':'auto'}
+        self.store.save('test-session',task,record={'id':'old-record-123','frame_id':'old-frame','captured_at':1},image=b'old photo')
+        p=payload('current-photo');p['history_record_id']='old-record-123'
+        job=self.wait(self.engine.submit(p))
+        self.assertEqual(job['status'],'done',job.get('error'))
+        req=[r for r in self.requests() if 'diagnostics' in r['schema_keys']][-1]
+        self.assertEqual([i['role'] for i in req['context']['images_in_order']],['selected_historical_reference','current'])
+        self.assertTrue(req['context']['selected_historical_reference']['historical_only'])
+        self.assertEqual(req['image_digests'][0],hashlib.sha256(b'old photo').hexdigest())
+        self.assertIsNone(job['temporal_context']['reference_frame_id'])
+        self.assertEqual(job['result']['temporal']['state'],'baseline')
     def test_low_quality_guide_has_no_motion_cues(self):
         import os
         from unittest.mock import patch
@@ -108,14 +120,6 @@ class LaneTests(unittest.TestCase):
 class BriefTests(unittest.TestCase):
     """Text-only task understanding runs when the typed task changes, before any photo."""
     setUp,tearDown,wait,requests=LaneTests.setUp,LaneTests.tearDown,LaneTests.wait,LaneTests.requests
-    def test_crop_keeps_facts_read_from_full_view(self):
-        self.wait(self.engine.submit(payload('battery-request')))
-        p=payload('battery-zoom-split');p['hires']='data:image/jpeg;base64,'+base64.b64encode(real_jpeg()).decode()
-        job=self.wait(self.engine.submit(p))
-        self.assertEqual(job['status'],'done',job.get('error'))
-        self.assertEqual(job['inspection_state']['status'],'answered')
-        self.assertEqual({f['field'] for f in job['inspection_knowledge']},{'标称电压','极性标记'})
-        self.assertNotIn('inspection_recovery',job['metrics'])
     def wait_brief(self,sid):
         deadline=time.time()+6
         while time.time()<deadline:
@@ -168,76 +172,6 @@ class BriefTests(unittest.TestCase):
         job=self.wait(key)
         self.assertEqual(job['kind'],'brief');self.assertEqual(job['lanes'],{'brief':'done'})
         self.assertTrue(any(j['id']==key for j in self.engine.updates('test-session',{})))
-
-
-def real_jpeg(width=320, height=180):
-    """A genuine JPEG (sips needs one to crop)."""
-    import struct, subprocess, zlib
-    raw=b''.join(b'\x00'+b''.join(bytes([(x*255)//width,(y*255)//height,128]) for x in range(width)) for y in range(height))
-    chunk=lambda t,d:struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
-    png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',width,height,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
-    with tempfile.TemporaryDirectory() as d:
-        src,out=Path(d)/'a.png',Path(d)/'a.jpg';src.write_bytes(png)
-        subprocess.run(['sips','-s','format','jpeg',str(src),'--out',str(out)],check=True,capture_output=True)
-        return out.read_bytes()
-
-
-class ZoomTests(unittest.TestCase):
-    """An unanswered information request is zoomed on the full-resolution frame before the user is asked."""
-    setUp,tearDown,wait,requests=LaneTests.setUp,LaneTests.tearDown,LaneTests.wait,LaneTests.requests
-    def test_stalled_zoom_resumes_diagnosis_on_same_frame_and_releases_lock(self):
-        self.wait(self.engine.submit(payload('battery-request')))
-        p=payload('battery-stalled');p['hires']='data:image/jpeg;base64,'+base64.b64encode(real_jpeg()).decode()
-        job=self.wait(self.engine.submit(p))
-        self.assertEqual(job['status'],'done',job.get('error'))
-        self.assertEqual(job['metrics']['auto_crop'],'zoom_retry')
-        self.assertEqual(job['metrics']['analysis_lane'],'task')
-        self.assertEqual(len(job['metrics']['inspection_readings']),2)
-        self.assertIsNone(job['inspection_request'])
-        self.assertIsNone(job['inspection_state'],'full diagnosis is visible again')
-        self.assertEqual(job['metrics']['guidance_owner'],'task')
-        recovery=job['metrics']['inspection_recovery']
-        self.assertEqual(recovery['missing_information'],['标称电压','极性标记'])
-        requests=[r for r in self.requests() if r['context'].get('inspection_recovery')]
-        self.assertEqual(len(requests),1,'only one full-diagnosis fallback')
-        self.assertEqual(requests[0]['context']['frame_id'],'battery-stalled')
-        self.assertEqual([i['role'] for i in requests[0]['context']['images_in_order']],['current','current_detail'])
-        self.assertIn('diagnostics',requests[0]['schema_keys'])
-        self.assertNotIn('清晰入镜',job['result']['guidance']['instruction'])
-
-    def test_stall_preserves_partial_facts_in_diagnosis_and_saved_record(self):
-        self.wait(self.engine.submit(payload('battery-request')))
-        first=self.wait(self.engine.submit(payload('battery-partial')))
-        self.assertEqual(first['inspection_state']['status'],'partial')
-        job=self.wait(self.engine.submit(payload('battery-stalled')))
-        self.assertEqual(job['status'],'done',job.get('error'))
-        self.assertIsNone(job['inspection_request'])
-        ctx=[r['context'] for r in self.requests() if r['context'].get('inspection_recovery')][-1]
-        self.assertEqual(ctx['inspection_recovery']['missing_information'],['极性标记'])
-        self.assertEqual(ctx['known_inspection_facts'][0]['value'],'1.5 V')
-        saved=next(r for r in self.store.detail('test-session')['records'] if r['frame_id']=='battery-stalled')
-        self.assertEqual(saved['inspection_knowledge'][0]['value'],'1.5 V')
-
-    def test_missing_reading_zooms_and_rereads_before_asking(self):
-        self.wait(self.engine.submit(payload('battery-request')))
-        p=payload('battery-zoom');p['hires']='data:image/jpeg;base64,'+base64.b64encode(real_jpeg()).decode()
-        job=self.wait(self.engine.submit(p))
-        self.assertEqual(job['metrics']['auto_crop'],'zoom_retry')
-        self.assertEqual(job['inspection_state']['status'],'answered','paraphrased fields and missing id still count')
-        self.assertEqual(sorted(f['field'] for f in job['inspection_state']['findings']),['极性标记','标称电压'])
-        reads=[r for r in self.requests() if 'request_id' in r['schema_keys']]
-        self.assertEqual([i['role'] for i in reads[-1]['context']['images_in_order']],['current','current_detail'])
-        self.assertIsNone(job['inspection_request'])
-    def test_remembered_region_is_zoomed_on_the_next_frame(self):
-        self.wait(self.engine.submit(payload('battery-request')))
-        with self.engine.lock:
-            req=self.engine.sessions['test-session']['inspection_request']
-            req['region']={'x':.5,'y':.4,'width':.3,'height':.3,'captured_at':time.time()}
-        p=payload('battery-zoom-2');p['hires']='data:image/jpeg;base64,'+base64.b64encode(real_jpeg()).decode()
-        job=self.wait(self.engine.submit(p))
-        self.assertEqual(job['metrics']['auto_crop'],'remembered_region')
-        self.assertEqual(len([r for r in self.requests() if 'request_id' in r['schema_keys']]),1,'one reading turn, no retry needed')
-        self.assertEqual(job['inspection_state']['status'],'answered')
 
 
 class FakeOllama:

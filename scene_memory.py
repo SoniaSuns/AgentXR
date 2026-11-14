@@ -4,7 +4,7 @@ from config import T
 
 
 def select_scene(prior, signature, captured_at):
-    if not prior or prior['signature'] != signature:
+    if not prior or prior.get('signature') != signature:
         return None
     scene = prior.get('scene_memory')
     return scene if scene and scene['captured_at'] <= captured_at else None

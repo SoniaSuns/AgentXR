@@ -22,6 +22,16 @@ python3 server.py
 
 Open [localhost:8765](http://localhost:8765), enable the camera, enter a task, and select **拍照并分析** (analyze a photo) or **开始流式观察** (start continuous observation). On macOS, you can also double-click `start.command`.
 
+Continuous observation waits for each analysis to finish, then captures again after the selected interval. Select **切换单次拍照** to stop automatic sampling and take one new photo; if an analysis is running, the new photo waits for it to finish.
+
+Each photo uses one complete analysis request, including user feedback and selected historical evidence. Supplementary detail requests collect facts without replacing the diagnosis or hiding its panel. The automatic close-up/retry analysis chain has been removed; you can still select a detail region manually.
+
+Guidance prioritizes one concrete move, using clearly visible relative positions without requiring a written plan. Object and destination annotations survive diagnostic processing, with a connecting arrow when both are located. Detailed analysis and effect records are collapsed by default. Open the annotated photo to zoom with the buttons, wheel or pinch, drag to pan, and double-click or select fit to reset. The photo and annotations scale together.
+
+Networking defaults to `"proxy": "auto"` in `settings.json`. Before each analysis, AgentXR checks enabled macOS proxies, 0dcloud's configured local ports, then proxy environment variables. Unreachable ports are skipped; otherwise it uses the system route, including VPN/TUN connections. Detection checks port availability, not model-service health, and does not control VPN apps or nodes. A route change takes effect on the next analysis and appears in the session label. An explicit proxy URL pins that route without direct fallback; an empty string pins the system route. `AGENTXR_PROXY` or `--proxy` overrides the setting.
+
+`codex.transport` requests HTTP/SSE by default, but the installed CLI may retain WebSockets for its built-in provider. Verify the actual transport in CLI connection logs; the health field `model_transport_requested` reports configuration intent only. Set it to `"auto"` to retain Codex's default selection. Restart the backend after changing settings; subsequent detectable proxy changes are picked up automatically.
+
 ## Optional breadboard tools
 
 ```sh
@@ -39,5 +49,7 @@ Freeze a clear frame, calibrate the board, and confirm endpoints before checking
 - Configuration: `settings.json` overrides defaults in `config.py`.
 
 ## Scope and data
+
+Saved analysis records and photos are retained until manually deleted by default (`memory.saved_records: 0` disables count-based pruning). Select **作为历史参考** on a history card to include that photo in the next analysis regardless of its age. One selected photo is attached as historical evidence; cancel the selection or switch sessions to stop using it. Previously deleted photos cannot be recovered.
 
 AgentXR is a local research prototype with 2D annotations. It analyzes selected frames, not every video frame. Photos are sent to the model service used by Codex; sessions and images are saved locally by default. Circuit checks depend on the board profile and confirmed inputs, and require physical verification.

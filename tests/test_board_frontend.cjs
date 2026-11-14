@@ -6,11 +6,12 @@ class El{
  replaceChildren(){this.children=[];this.value='';}
  getBoundingClientRect(){return {left:0,top:0,width:1000,height:500};}
  click(){}
+ setAttribute(k,v){this[k]=v;}
 }
 const els=new Map([...ids].map(id=>[id,new El()]));
 const spec={columns:30,row_y:[0,1,2,3,4,7,8,9,10,11],rails:[],name:'test'};
 const requests=[],frames=new Map();let stopCount=0;
-const context=vm.createContext({document:{getElementById:id=>{assert(ids.has(id),`missing HTML id ${id}`);return els.get(id)},createElement:()=>new El()},
+const context=vm.createContext({document:{getElementById:id=>{assert(ids.has(id),`missing HTML id ${id}`);return els.get(id)},createElement:()=>new El(),createElementNS:()=>new El()},
  window:{},console,JSON,Math,Array,Object,crypto:{randomUUID:()=> 'board-frame-1'},Blob,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},setTimeout(){},
  stream:{},ready:true,connected:true,session:'session-a',frames,stopAuto(){stopCount++},currentTask:()=>({goal:'LED',steps:[],plan:'',domain:'electronics'}),
  captureFrame:async()=>({image:'low',hires:'high',memory_image:'memory',captured_at:1234,width:768,height:432}),

@@ -6,6 +6,7 @@ import signal
 import subprocess
 import threading
 import time
+from network_route import resolve_route, route_environment
 
 
 class CodexRPC:
@@ -19,27 +20,26 @@ class CodexRPC:
         self.generation = 0
         self.diagnostic = ''
         self.readers = []
+        self.route = None
 
     def start(self):
-        if self.proc and self.proc.poll() is None:
+        route = resolve_route(self.proxy)
+        if self.proc and self.proc.poll() is None and self.route and self.route['url'] == route['url']:
+            self.route = route
             return False
         self.close()
+        self.route = route
         self.notifications = queue.Queue(maxsize=4096)
         self.diagnostic = ''
-        env = os.environ.copy()
-        for name in ('HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','http_proxy','https_proxy','all_proxy'):
-            if self.proxy:
-                env[name] = self.proxy
-            else:
-                # An empty proxy explicitly selects the system/VPN route.
-                # Do not inherit an obsolete proxy from a long-lived terminal.
-                env.pop(name, None)
-        for name in ('NO_PROXY','no_proxy'):
-            env[name] = ','.join(filter(None, [env.get(name), 'localhost', '127.0.0.1', '::1']))
+        env = route_environment(os.environ, route)
         from config import CONFIG
         command = [self.cli, 'app-server', '--listen', 'stdio://',
                    '-c', 'features.shell_tool=false', '-c', 'mcp_servers={}',
                    '-c', f'model_reasoning_effort="{self.effort}"']
+        # Request HTTP/SSE. Some CLI versions retain their built-in provider's
+        # WebSocket setting; this override is not proof of the negotiated transport.
+        if CONFIG.get('codex', {}).get('transport') == 'http':
+            command += ['-c', 'model_providers.openai.supports_websockets=false']
         for feature in CONFIG.get('codex', {}).get('disable_features', []):
             if feature.replace('_', '').isalnum():
                 command += ['-c', f'features.{feature}=false']

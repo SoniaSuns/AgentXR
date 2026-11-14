@@ -51,7 +51,7 @@ const AXR=(()=>{
   cloth:g=>{el('path',{d:'M-10 -8 Q0 -14 10 -8 L8 10 Q0 6 -8 10 Z',class:'tool-fill'},g);},
   other:g=>{el('circle',{cx:0,cy:0,r:8,class:'tool-fill'},g);},
  };
- function tool(name,parent){const g=el('g',{class:'cue-tool'},parent);(TOOLS[name]||TOOLS.hand)(g);return g;}
+ function tool(name,parent,scale=1){const g=el('g',{class:'cue-tool'},parent);const icon=el('g',{transform:`scale(${.55*scale})`},g);(TOOLS[name]||TOOLS.hand)(icon);return g;}
 
  const TURN_DEG={quarter:90,half:180,full:360,none:270};
  const TURN_TEXT={quarter:'1/4 圈',half:'半圈',full:'一圈',none:''};
@@ -62,52 +62,53 @@ const AXR=(()=>{
   el('text',{x:tx,y:ty,class:'cue-label','text-anchor':tx>W*.75?'end':'start'},svg).textContent=text;
  }
 
- function draw(svg,cues,width,height){
+ function draw(svg,cues,width,height,zoom=1){
+  const size=1/Math.max(.5,zoom),px=v=>v*size;
   svg.replaceChildren();
   const W=Math.max(1,Math.round(width)),H=Math.max(1,Math.round(height));
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('width',W);svg.setAttribute('height',H);
   const id='ah'+(++uid);
   const defs=el('defs',{},svg);
-  const marker=el('marker',{id,viewBox:'0 0 10 10',refX:6,refY:5,markerWidth:5,markerHeight:5,orient:'auto-start-reverse'},defs);
+  const marker=el('marker',{id,viewBox:'0 0 10 10',refX:10,refY:5,markerUnits:'userSpaceOnUse',markerWidth:px(6),markerHeight:px(6),orient:'auto-start-reverse'},defs);
   el('path',{d:'M0 0 L10 5 L0 10 z',class:'cue-head'},marker);
   for(const cue of cues||[]){
    const x1=cue.x1*W,y1=cue.y1*H,x2=cue.x2*W,y2=cue.y2*H;
-   const g=el('g',{class:`cue cue-${cue.type}`},svg);
+   const g=el('g',{class:`cue cue-${cue.type}`,style:`--cue-scale:${size}`},svg);
    const d=`M${x1.toFixed(1)} ${y1.toFixed(1)} L${x2.toFixed(1)} ${y2.toFixed(1)}`;
    if(cue.type==='arrow'||cue.type==='insert'||cue.type==='pull'){
     el('path',{d,class:'cue-shadow'},g);
     el('path',{d,class:'cue-flow','marker-end':`url(#${id})`},g);
-    if(cue.type==='insert')el('circle',{cx:x2,cy:y2,r:9,class:'cue-ring'},g);
-    if(cue.tool&&cue.tool!=='none'){const t=tool(cue.tool,g);t.setAttribute('class','cue-tool ghost');el('animateMotion',{dur:'1.8s',repeatCount:'indefinite',path:d},t);}
-    label(g,cue.label||({insert:'插入',pull:'拔出'})[cue.type]||'',(x1+x2)/2+8,(y1+y2)/2-8,W,H);
+    if(cue.type==='insert')el('circle',{cx:x2,cy:y2,r:px(4),class:'cue-ring'},g);
+    if(cue.tool&&cue.tool!=='none'){const t=tool(cue.tool,g,size);t.setAttribute('class','cue-tool ghost');el('animateMotion',{dur:'1.8s',repeatCount:'indefinite',path:d},t);}
+    label(g,cue.label||({insert:'插入',pull:'拔出'})[cue.type]||'',(x1+x2)/2+px(6),(y1+y2)/2-px(7),W,H);
    }else if(cue.type==='rotate'){
-    const r=Math.max(10,cue.radius*Math.min(W,H)),deg=TURN_DEG[cue.turns]||270,sweep=Math.min(deg,330)*Math.PI/180,cw=cue.direction!=='ccw';
+    const r=Math.max(px(6),cue.radius*Math.min(W,H)),deg=TURN_DEG[cue.turns]||270,sweep=Math.min(deg,330)*Math.PI/180,cw=cue.direction!=='ccw';
     const sx=x1+r,sy=y1,ex=x1+r*Math.cos(cw?sweep:-sweep),ey=y1+r*Math.sin(cw?sweep:-sweep);
     const arc=`M${sx.toFixed(1)} ${sy.toFixed(1)} A${r.toFixed(1)} ${r.toFixed(1)} 0 ${sweep>Math.PI?1:0} ${cw?1:0} ${ex.toFixed(1)} ${ey.toFixed(1)}`;
     const spin=el('g',{},g);
     el('path',{d:arc,class:'cue-shadow'},spin);el('path',{d:arc,class:'cue-flow','marker-end':`url(#${id})`},spin);
     el('animateTransform',{attributeName:'transform',type:'rotate',from:`0 ${x1} ${y1}`,to:`${cw?360:-360} ${x1} ${y1}`,dur:'3s',repeatCount:'indefinite'},spin);
-    el('circle',{cx:x1,cy:y1,r:3,class:'cue-head'},g);
-    label(g,(cue.label||'旋转')+` · ${cw?'顺时针':'逆时针'}${TURN_TEXT[cue.turns]?' '+TURN_TEXT[cue.turns]:''}`,x1+r+6,y1-r,W,H);
+    el('circle',{cx:x1,cy:y1,r:px(2),class:'cue-head'},g);
+    label(g,(cue.label||'旋转')+` · ${cw?'顺时针':'逆时针'}${TURN_TEXT[cue.turns]?' '+TURN_TEXT[cue.turns]:''}`,x1+r+px(6),y1-r,W,H);
    }else if(cue.type==='press'){
-    el('circle',{cx:x1,cy:y1,r:6,class:'cue-head'},g);
-    const ring=el('circle',{cx:x1,cy:y1,r:8,class:'cue-ring'},g);
-    el('animate',{attributeName:'r',values:'8;22;8',dur:'1.4s',repeatCount:'indefinite'},ring);
+    el('circle',{cx:x1,cy:y1,r:px(2.5),class:'cue-head'},g);
+    const ring=el('circle',{cx:x1,cy:y1,r:px(4),class:'cue-ring'},g);
+    el('animate',{attributeName:'r',values:`${px(4)};${px(9)};${px(4)}`,dur:'1.4s',repeatCount:'indefinite'},ring);
     el('animate',{attributeName:'opacity',values:'1;0;1',dur:'1.4s',repeatCount:'indefinite'},ring);
-    const down=`M${x1} ${y1-40} L${x1} ${y1-14}`;el('path',{d:down,class:'cue-flow','marker-end':`url(#${id})`},g);
-    label(g,cue.label||'按压',x1+12,y1-24,W,H);
+    const down=`M${x1} ${y1-px(22)} L${x1} ${y1-px(7)}`;el('path',{d:down,class:'cue-flow','marker-end':`url(#${id})`},g);
+    label(g,cue.label||'按压',x1+px(8),y1-px(12),W,H);
    }else if(cue.type==='cut'){
     el('path',{d,class:'cue-cut'},g);
-    const t=tool(cue.tool&&cue.tool!=='none'?cue.tool:'scissors',g);t.setAttribute('class','cue-tool ghost');
+    const t=tool(cue.tool&&cue.tool!=='none'?cue.tool:'scissors',g,size);t.setAttribute('class','cue-tool ghost');
     el('animateMotion',{dur:'2s',repeatCount:'indefinite',path:d,rotate:'auto'},t);
-    label(g,cue.label||'沿虚线切',(x1+x2)/2+8,(y1+y2)/2-10,W,H);
+    label(g,cue.label||'沿虚线切',(x1+x2)/2+px(6),(y1+y2)/2-px(7),W,H);
    }else if(cue.type==='tool_ghost'){
     el('path',{d,class:'cue-trail'},g);
-    const start=tool(cue.tool,g);start.setAttribute('transform',`translate(${x1} ${y1})`);start.setAttribute('class','cue-tool faint');
-    const moving=tool(cue.tool,g);moving.setAttribute('class','cue-tool ghost');
+    const start=tool(cue.tool,g,size);start.setAttribute('transform',`translate(${x1} ${y1})`);start.setAttribute('class','cue-tool faint');
+    const moving=tool(cue.tool,g,size);moving.setAttribute('class','cue-tool ghost');
     el('animateMotion',{dur:'2.2s',repeatCount:'indefinite',path:d},moving);
-    el('circle',{cx:x2,cy:y2,r:7,class:'cue-ring'},g);
-    label(g,cue.label||'',x2+12,y2-10,W,H);
+    el('circle',{cx:x2,cy:y2,r:px(4),class:'cue-ring'},g);
+    label(g,cue.label||'',x2+px(8),y2-px(7),W,H);
    }
   }
  }

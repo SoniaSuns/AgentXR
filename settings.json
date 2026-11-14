@@ -1,11 +1,9 @@
 {
-  "proxy": "",
+  "proxy": "auto",
   "reasoning_effort": "low",
-  "fast_inspection": true,
   "lanes": {
     "guide": false,
-    "guide_reasoning_effort": "low",
-    "inspection_reasoning_effort": "low"
+    "guide_reasoning_effort": "low"
   },
   "images": {
     "current_max_width": 768,

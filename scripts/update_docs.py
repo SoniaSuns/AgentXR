@@ -13,6 +13,7 @@ Usage:
 """
 import ast
 import hashlib
+import importlib
 import json
 import re
 import sys
@@ -151,7 +152,7 @@ def section_modules():
 def load_python(module):
     sys.path.insert(0, str(ROOT))
     try:
-        return __import__(module)
+        return importlib.reload(sys.modules[module]) if module in sys.modules else importlib.import_module(module)
     finally:
         sys.path.pop(0)
 
@@ -161,7 +162,6 @@ def section_schemas():
     try:
         contracts = load_python('contracts')
         guide = load_python('guide')
-        fast = load_python('fast_inspection')
     except Exception as exc:
         return '\n'.join(lines + [f'（导入失败，暂时无法读取：{type(exc).__name__}: {exc}）'])
 
@@ -173,8 +173,7 @@ def section_schemas():
         return out
 
     for title, schema in (('完整通道 `contracts.SCHEMA`', contracts.SCHEMA),
-                          ('快速通道 `guide.GUIDE_SCHEMA`', guide.GUIDE_SCHEMA),
-                          ('信息读取 `fast_inspection.FAST_SCHEMA`', fast.FAST_SCHEMA)):
+                          ('快速通道 `guide.GUIDE_SCHEMA`', guide.GUIDE_SCHEMA)):
         fields = describe(schema)
         lines.append(f'- **{title}**（{len(fields)} 个顶层字段）：' + '；'.join(fields))
     return '\n'.join(lines)

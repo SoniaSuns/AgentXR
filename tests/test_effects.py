@@ -16,6 +16,7 @@ class EffectTests(unittest.TestCase):
         return reconcile_effect(self.result, self.expected, self.before, self.frame)
 
     def test_freezes_expectation_and_routes_mismatch_to_guidance(self):
+        self.result['next_action']['status']='need_detail'
         r=self.reconcile()
         self.assertEqual(r['action_effect']['expected_change'],self.expected['expected_change'])
         self.assertEqual(r['action_effect']['action'],self.expected['action'])
@@ -50,10 +51,20 @@ class EffectTests(unittest.TestCase):
         self.assertEqual(next_expected['expected_change'],r['next_action']['expected_result'])
 
     def test_pending_expectation_survives_unrelated_new_suggestion(self):
+        self.result['next_action']['status']='need_context'
         self.result['action_effect'].update(verdict='uncertain',observability='occluded')
         r=self.reconcile()
         self.assertIs(remember_expectation(self.expected,r,self.frame,104),self.expected)
         self.assertNotIn('image',public_expectation(self.expected))
+
+    def test_validated_next_action_is_not_replaced_by_repeated_verification(self):
+        self.result['action_effect'].update(verdict='pending',action_status='not_observed',action_evidence=[])
+        instruction=self.result['guidance']['instruction']
+        r=self.reconcile()
+        self.assertEqual(r['guidance']['instruction'],instruction)
+        self.assertTrue(r['next_action']['targets'])
+        self.assertEqual(r['action_effect']['verdict'],'pending','old effect remains unconfirmed')
+        self.assertEqual(remember_expectation(self.expected,r,self.frame,104)['frame_id'],'after')
 
     def test_baseline_and_static_frames_do_not_invent_actions(self):
         for reference in [None,self.before]:

@@ -3,7 +3,7 @@ from config import T, M
 
 
 def select_reference(prior, signature, captured_at):
-    if not prior or prior['signature'] != signature:
+    if not prior or prior.get('signature') != signature:
         return None
     anchor = prior.get('anchor')
     if not anchor or not 0 <= captured_at-anchor['captured_at'] <= M('anchor_max_age_seconds'):

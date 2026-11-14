@@ -4,7 +4,7 @@ from config import T, M
 
 
 def select_expectation(prior, signature, captured_at):
-    if not prior or prior['signature'] != signature:
+    if not prior or prior.get('signature') != signature:
         return None
     expected = prior.get('expectation')
     if expected and 0 <= captured_at - expected['captured_at'] <= M('anchor_max_age_seconds'):
@@ -65,11 +65,12 @@ def reconcile_effect(result, expected, reference, frame):
         result['progress'] = round(100 * sum(s['status'] == 'done' for s in result['steps']) / len(result['steps'])) if result['steps'] else None
     # A mismatch must feed back into guidance, even if generic intent suggests advancing.
     # Keep an existing diagnostic check (and its rewiring safeguards) when available.
-    if review['verdict'] == 'mismatched' and result['diagnostics']['status'] == 'none':
+    actionable = usable and result['guidance']['mode']=='act' and result['next_action']['status']=='ready'
+    if review['verdict'] == 'mismatched' and result['diagnostics']['status'] == 'none' and not actionable:
         instruction = '先核对动作结果：' + review['actual_observation'] + '；预期：' + review['expected_change'] + '。请拍清这两者不一致的部位，再决定下一步。'
         result['guidance'] = {'mode':'observe', 'title':'动作效果与预期不符', 'instruction':instruction, 'check':review['expected_change']}
         result['next_action'].update(status='need_detail', instruction=instruction, targets=[], location_label='', preconditions=[], expected_result=review['expected_change'])
-    elif review['verdict'] in ('uncertain', 'pending') and expected and result['diagnostics']['status'] == 'none':
+    elif review['verdict'] in ('uncertain', 'pending') and expected and result['diagnostics']['status'] == 'none' and not actionable:
         instruction = (review['verification'] or '请拍清上一动作的结果，确认是否达到预期。') + ' 若已执行，请展示结果，不必为确认而重复操作。'
         result['guidance'] = {'mode':'observe', 'title':'先验证上一动作的效果', 'instruction':instruction, 'check':review['expected_change']}
         result['next_action'].update(status='need_detail', instruction=instruction, targets=[], location_label='', preconditions=[], expected_result=review['expected_change'])
@@ -91,9 +92,10 @@ def record_effect(history, result, expected, reference, frame):
 
 
 def remember_expectation(expected, result, frame, issued_at):
-    if expected and result['action_effect']['verdict'] in ('pending', 'uncertain'):
-        return expected
     action = result['next_action']
+    if expected and result['action_effect']['verdict'] in ('pending', 'uncertain'):
+        if not (action['status']=='ready' and result['guidance']['mode']=='act' and action['instruction']!=expected['action']):
+            return expected
     diagnostic_check = result['diagnostics']['status'] == 'suspected' and result['diagnostics']['check']['kind'] in ('observe', 'measure')
     if ((action['status'] == 'ready' and result['guidance']['mode'] == 'act') or diagnostic_check) and action['expected_result'].strip():
         return {**frame, 'id':frame['frame_id'], 'issued_at':issued_at,

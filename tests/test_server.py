@@ -91,6 +91,27 @@ class Tests(unittest.TestCase):
         self.engine.timeout=.25
         with patch.dict(os.environ,{'FAKE_MODE':'timeout'}):job=self.wait(self.engine.submit(payload()))
         self.assertEqual(job['status'],'error');self.assertIn('超时',job['error']);self.assertEqual(job['metrics']['retry_count'],1)
+    def test_feedback_before_first_frame_does_not_kill_worker(self):
+        self.engine.feedback('test-session',{'kind':'feedback','reaction':'done'})
+        job=self.wait(self.engine.submit(payload()))
+        self.assertEqual(job['status'],'done',job)
+        self.assertTrue(self.engine.lanes['full'].worker.is_alive())
+
+    def test_preparation_failure_finishes_job_and_worker_recovers(self):
+        with patch.object(self.engine,'_domain',side_effect=ValueError('preparation failed')):
+            job=self.wait(self.engine.submit(payload()))
+        self.assertEqual(job['status'],'error',job)
+        self.assertIn('preparation failed',job['error'])
+        self.assertTrue(self.engine.lanes['full'].worker.is_alive())
+        self.assertEqual(self.wait(self.engine.submit(payload()))['status'],'done')
+
+    def test_feedback_preserves_task_without_visual_memory(self):
+        from store import SessionStore
+        self.engine.store=SessionStore(Path(self.tmp.name)/'sessions')
+        task={'goal':'保留目标','steps':[],'plan':'保留说明','domain':'electronics'}
+        self.engine.store.create('test-session',task)
+        self.engine.feedback('test-session',{'kind':'feedback','reaction':'done'})
+        self.assertEqual(self.engine.store.detail('test-session')['task'],task)
     def test_ambiguous_intent_becomes_question_not_forced_confirm(self):
         r=copy.deepcopy(RESULT)
         alternative=copy.deepcopy(r['intent']['candidates'][0])
@@ -179,7 +200,7 @@ class Tests(unittest.TestCase):
         partial=self.wait(self.engine.submit(payload('battery-partial')))
         self.assertEqual(partial['status'],'done',partial)
         self.assertEqual(partial['inspection_state']['status'],'partial')
-        self.assertNotIn('LED',partial['result']['guidance']['instruction'])
+        self.assertEqual(partial['metrics']['guidance_owner'],'task')
         self.assertEqual(partial['temporal_memory']['anchor_frame_id'],'battery-request')
         self.engine.sessions['test-session']['turns']=8
         complete=self.wait(self.engine.submit(payload('battery-complete')))
@@ -187,7 +208,7 @@ class Tests(unittest.TestCase):
         self.assertFalse(complete['metrics']['thread_reused'])
         self.assertIsNone(complete['inspection_request'])
         self.assertEqual(complete['inspection_state']['status'],'answered')
-        self.assertIn('1.5 V',complete['result']['guidance']['instruction'])
+        self.assertIn('1.5 V',[f['value'] for f in complete['inspection_knowledge']])
         next_job=self.wait(self.engine.submit(payload('resume-circuit')))
         self.assertEqual(next_job['status'],'done',next_job)
         ctx=self.request_log()[-1]['context']
@@ -198,7 +219,6 @@ class Tests(unittest.TestCase):
         self.assertTrue(ctx['task_scene_memory']['historical_only'])
         self.assertNotIn('请恢复',complete['result']['guidance']['instruction'])
     def test_old_task_view_is_explicitly_sent_after_thread_rotation(self):
-        self.engine.fast_inspection=False
         first=self.wait(self.engine.submit(payload('battery-request')))
         self.assertEqual(first['status'],'done',first)
         memory=self.engine.sessions['test-session']
@@ -213,20 +233,19 @@ class Tests(unittest.TestCase):
         self.assertGreater(ctx['task_scene_memory']['age_seconds'],600)
         self.assertGreater(job['metrics']['scene_memory_image_bytes'],0)
         self.assertEqual(job['inspection_state']['status'],'partial')
-    def test_fast_inspection_only_sends_current_images_and_compact_contract(self):
+    def test_pending_inspection_keeps_full_context_and_uses_one_model_call(self):
         self.wait(self.engine.submit(payload('battery-request')))
-        scene_id=self.engine.sessions['test-session']['scene_memory']['frame_id']
-        job=self.wait(self.engine.submit(payload('battery-partial')))
+        before=len(self.request_log())
+        job=self.wait(self.engine.submit(payload('battery-stalled')))
         self.assertEqual(job['status'],'done',job)
+        self.assertEqual(len(self.request_log())-before,1)
         request=self.request_log()[-1]
-        self.assertEqual(job['metrics']['analysis_lane'],'inspection-fast')
-        self.assertEqual(request['effort'],'low')
-        self.assertEqual([i['role'] for i in request['context']['images_in_order']],['current'])
-        self.assertNotIn('diagnostics',request['schema_keys'])
-        self.assertNotIn('previous',request['context'])
-        self.assertLess(job['metrics']['schema_chars'],2000)
-        self.assertEqual(self.engine.sessions['test-session']['scene_memory']['frame_id'],scene_id)
-        self.assertEqual(job['inspection_state']['findings'][0]['value'],'1.5 V')
+        self.assertEqual(job['metrics']['analysis_lane'],'task')
+        self.assertIn('diagnostics',request['schema_keys'])
+        self.assertIn('previous',request['context'])
+        self.assertIsNotNone(request['context']['task_scene_memory'])
+        self.assertEqual(job['metrics']['guidance_owner'],'task')
+        self.assertNotIn('inspection.zoom',[e['event'] for e in job['events']])
     def test_failed_analysis_retains_only_validated_visual_memory(self):
         self.wait(self.engine.submit(payload('baseline-frame')))
         self.engine.stop(session='test-session')
@@ -243,9 +262,13 @@ class Tests(unittest.TestCase):
         t=r['next_action']['targets'][0]
         self.assertAlmostEqual(t['x'],.35);self.assertAlmostEqual(t['y'],.34)
         self.assertAlmostEqual(t['width'],.15);self.assertEqual(t['coordinate_space'],'full_frame')
-    def test_fine_position_action_requires_plan_labels_and_destination(self):
+    def test_fine_position_accepts_visible_location_without_written_plan(self):
         r=copy.deepcopy(RESULT);r['next_action'].update(precision='fine_position',location_label='A12',location_basis='visible_labels')
         r['next_action']['targets'][0]['role']='destination'
+        self.assertEqual(reconcile_action(copy.deepcopy(r))['next_action']['status'],'ready')
+        r['next_action']['location_basis']='visual_location'
+        self.assertEqual(reconcile_action(copy.deepcopy(r))['next_action']['status'],'ready')
+        r['next_action']['location_basis']='provided_plan'
         self.assertEqual(reconcile_action(copy.deepcopy(r))['next_action']['status'],'need_context')
         self.assertEqual(reconcile_action(copy.deepcopy(r),plan='红线接 A12')['next_action']['status'],'ready')
         r['next_action']['location_evidence']=[]

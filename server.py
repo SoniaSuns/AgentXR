@@ -25,7 +25,7 @@ from config import CONFIG, T, M, configure, public_config, storage_dir
 from contracts import SCHEMA, prepare, validate, _jpeg
 import breadboard
 from codex_rpc import CodexRPC
-from crop import crop as crop_jpeg, expand as expand_roi, jpeg_size
+from image_metadata import jpeg_size
 from local_vlm import OllamaClient, fit as fit_local, LOCAL_SCHEMA, LOCAL_PROMPT, compact_context, expand_local
 from temporal import select_reference, reconcile_temporal, remember
 from actions import reconcile_action
@@ -33,7 +33,6 @@ from diagnostics import reconcile_diagnostics
 from effects import select_expectation, public_expectation, reconcile_effect, record_effect, remember_expectation
 from inspection import select_inspection, inspection_candidate, reconcile_inspection, release_inspection
 from scene_memory import select_scene, scene_context, remember_scene
-from fast_inspection import FAST_SCHEMA, FAST_PROMPT, expand_response
 from guide import GUIDE_SCHEMA, GUIDE_PROMPT, guide_context, reconcile_guide
 from brief import BRIEF_SCHEMA, BRIEF_PROMPT, brief_context, reconcile_brief, plan_from_brief, brief_for_frames
 from board_reader import BOARD_READ_SCHEMA, BOARD_READ_PROMPT, read_context, reconcile_read
@@ -132,11 +131,10 @@ class Lane:
 
 
 class Engine:
-    def __init__(self, cli='codex', model='', timeout=120, reasoning_effort='low', proxy='', rpc=None, fast_inspection=True,
+    def __init__(self, cli='codex', model='', timeout=120, reasoning_effort='low', proxy='', rpc=None,
                  guide_lane=None, store=None, guide_rpc=None, brief_rpc=None, guide_backend=None):
         self.cli, self.model, self.timeout, self.reasoning_effort = cli, model, timeout, reasoning_effort
         self.proxy = proxy
-        self.fast_inspection = fast_inspection
         self.store = store
         self.lock = threading.RLock()
         self.changed = threading.Condition(self.lock)
@@ -220,6 +218,9 @@ class Engine:
         captured_at=payload.get('captured_at',time.time()*1000)
         if isinstance(captured_at,bool) or not isinstance(captured_at,(int,float)) or not 0<captured_at<=time.time()*1000+30000:
             raise ValueError('captured_at 必须为有效的毫秒时间戳')
+        if task.get('history_record_id'):
+            if not self.store:raise ValueError('未启用历史照片存储')
+            task['historical_photo']=self.store.historical_photo(session,task['history_record_id'],captured_at/1000)
         with self.changed:
             if self.closed:
                 raise RuntimeError('服务正在关闭')
@@ -301,6 +302,14 @@ class Engine:
                 self._set_lane(job, lane.name, 'running')
             try:
                 (self._run_full if lane.name=='full' else self._run_guide)(job,task,lane)
+            except Exception as exc:
+                # Preparation can fail before a lane's own try/finally begins.
+                # Publish a terminal state and keep the worker alive for later frames.
+                started=time.monotonic()
+                try:
+                    self._fail(lane,job,exc,None,{})
+                finally:
+                    self._finish(lane,job,'error',started)
             finally:
                 with self.changed:
                     lane.active=None
@@ -598,17 +607,15 @@ class Engine:
             data=task.get('hires') or data
             job['metrics'].update(input_resolution=jpeg_size(data),input_source='calibrated_frame')
             job['board_evidence']=task['board']['connections']
-        fast=bool(self.fast_inspection and inspection_request)
-        lane_name='inspection-fast' if fast else 'task'
-        prompt=(FAST_PROMPT+('\n'+domain['inspection_prompt'] if domain and domain.get('inspection_prompt') else '')) if fast else PROMPT+('\n'+domain['prompt'] if domain else '')
-        inspection_hint=(domain or {}).get('inspection_hint','')
-        prompt_key=lane_name+':'+(domain['id'] if domain else '')
-        schema=FAST_SCHEMA if fast else SCHEMA
-        effort=CONFIG['lanes'].get('inspection_reasoning_effort','low') if fast else self.reasoning_effort
-        # These memories stay in the session; a reading turn does not upload them.
-        sent_reference=None if fast else reference
-        sent_expectation=None if fast else expectation
-        sent_scene=None if fast else scene_memory
+        historical=task.get('historical_photo')
+        lane_name='task'
+        prompt=PROMPT+('\n'+domain['prompt'] if domain else '')
+        prompt_key='task:'+(domain['id'] if domain else '')
+        schema=SCHEMA
+        effort=self.reasoning_effort
+        sent_reference=reference
+        sent_expectation=expectation
+        sent_scene=scene_memory
         outcome='error'
         detail_photo=Path(self.tmp.name)/(job['id']+'-detail.jpg')
         reference_photo=Path(self.tmp.name)/(job['id']+'-reference.jpg')
@@ -616,6 +623,7 @@ class Engine:
         scene_photo=Path(self.tmp.name)/(job['id']+'-scene.jpg')
         grid_photo=Path(self.tmp.name)/(job['id']+'-board.jpg')
         photo=Path(self.tmp.name)/(job['id']+'.jpg')
+        history_photo=Path(self.tmp.name)/(job['id']+'-history.jpg')
         thread_id=None
         state={}
         rpc=lane.rpc
@@ -624,6 +632,9 @@ class Engine:
                 raise InterruptedError('分析已取消')
             photo.write_bytes(data)
             cold=rpc.start()
+            route=getattr(rpc,'route',None)
+            if route:
+                job['metrics']['network_route']=route['label']
             self.event(job,'codex.ready',cold_start=cold)
             job['metrics']['cli_ready_ms']=round((time.monotonic()-started)*1000)
             # Rotate threads to bound image context; carry only the validated state forward.
@@ -650,16 +661,6 @@ class Engine:
             with self.changed:
                 job['metrics'].update({'model':actual_model,'thread_reused':reuse,'process_generation':rpc.generation,'analysis_lane':lane_name,'reasoning_effort':effort,'domain':domain['id'] if domain else None})
                 self._publish(job)
-            # Zoom before asking: an open information request whose target was located in a recent
-            # frame is read from a crop of this frame's full-resolution copy at that spot.
-            if fast and not detail and task.get('hires'):
-                region=inspection_request.get('region')
-                if region and job['captured_at']-region['captured_at']<=M('inspection_region_seconds'):
-                    zoomed=crop_jpeg(task['hires'],expand_roi(region))
-                    if zoomed:
-                        detail=zoomed
-                        job['metrics']['auto_crop']='remembered_region'
-                        self.event(job,'inspection.zoom',source='remembered_region',roi=detail['roi'])
             images=[]
             if sent_reference:
                 reference_photo.write_bytes(sent_reference['image'])
@@ -672,6 +673,9 @@ class Engine:
             if extra_scene:
                 scene_photo.write_bytes(scene_memory['image'])
                 images.append({'role':'historical_task_view','frame_id':scene_memory['frame_id'],'captured_at':scene_memory['captured_at']})
+            if historical:
+                history_photo.write_bytes(historical['image'])
+                images.append({'role':'selected_historical_reference',**{k:v for k,v in historical.items() if k!='image'}})
             images.append({'role':'current','frame_id':job['frame_id'],'captured_at':job['captured_at']})
             if detail:
                 detail_photo.write_bytes(detail['image'])
@@ -686,6 +690,7 @@ class Engine:
                 job['metrics']['expectation_image_bytes']=len(expectation['image']) if extra_expectation else 0
                 job['metrics']['scene_memory_image_bytes']=len(scene_memory['image']) if extra_scene else 0
                 job['metrics']['total_image_bytes']=len(data)+job['metrics']['reference_image_bytes']+job['metrics']['detail_image_bytes']+job['metrics']['expectation_image_bytes']+job['metrics']['scene_memory_image_bytes']
+                if historical:job['metrics']['total_image_bytes']+=len(historical['image'])
                 job['scene_context']=scene_context(sent_scene,job['captured_at'])
                 job['effect_context']=public_expectation(expectation)
                 job['temporal_context']={'image_count':len(images),'reference_frame_id':sent_reference['frame_id'] if sent_reference else None,'reference_action':sent_reference['action'] if sent_reference else None,'gap_seconds':round(job['captured_at']-sent_reference['captured_at'],2) if sent_reference else None}
@@ -699,15 +704,13 @@ class Engine:
                 context['task_brief']=brief_for_frames(self._brief(job['session'],task))
             with self.lock:
                 context.update(ask.context(deepcopy(self._dialog(job['session'],False)),job['captured_at']))
-            task_context=deepcopy(context)
+            if historical:
+                context['selected_historical_reference']={k:v for k,v in historical.items() if k!='image'}
             if task.get('board'):
                 context['board_evidence']=task['board']['connections']
                 context['board_quality']={k:task['board'][k] for k in ('min_pitch_px','reprojection_error_px','hole_support','width','height')}
                 job['metrics']['board_quality']=context['board_quality']
                 job['metrics']['total_image_bytes']+=len(task['board']['image'])
-            if fast:
-                context={'inspection_request':inspection_request,'images_in_order':images,'frame_id':job['frame_id'],
-                         'user_dialog':context.get('user_dialog',[])}
             context_text=json.dumps(context,ensure_ascii=False)
             job['metrics'].update(context_chars=len(context_text),schema_chars=len(json.dumps(schema)),image_count=len(images))
             params={'threadId':thread_id,'effort':effort,'outputSchema':schema,
@@ -715,6 +718,7 @@ class Engine:
                             + ([{'type':'localImage','path':str(reference_photo)}] if sent_reference else [])
                             + ([{'type':'localImage','path':str(expectation_photo)}] if extra_expectation else [])
                             + ([{'type':'localImage','path':str(scene_photo)}] if extra_scene else [])
+                            + ([{'type':'localImage','path':str(history_photo)}] if historical else [])
                             + [{'type':'localImage','path':str(photo)}]
                             + ([{'type':'localImage','path':str(detail_photo)}] if detail else [])
                             + ([{'type':'localImage','path':str(grid_photo)}] if task.get('board') else [])}
@@ -722,87 +726,16 @@ class Engine:
                 raise InterruptedError('分析已取消')
             final_text=self._stream(lane,job,thread_id,params,started,state)
             decoded=json.loads(final_text)
-            readings=[deepcopy(decoded)] if fast else []
-            # Still missing, but the model located the target: crop there and read again in the
-            # same turn sequence before the user is asked to move the camera.
-            if (fast and not detail and task.get('hires') and decoded.get('status')!='answered'
-                    and decoded.get('regions') and decoded['regions'][0]['coordinate_space']=='full_frame'):
-                zoomed=crop_jpeg(task['hires'],expand_roi(decoded['regions'][0]))
-                if zoomed and not job.get('cancelled'):
-                    detail=zoomed
-                    job['metrics']['auto_crop']='zoom_retry'
-                    self.event(job,'inspection.zoom',source='zoom_retry',roi=detail['roi'])
-                    detail_photo.write_bytes(detail['image'])
-                    images.append({'role':'current_detail','frame_id':job['frame_id'],'roi_in_full_frame':detail['roi']})
-                    context['images_in_order']=images
-                    retry_text='放大复读：第二张图是同一时刻 current 中你给出区域的高分辨率局部图。只根据它补读仍缺的信息，按同一 schema 输出。\n'+json.dumps(context,ensure_ascii=False)
-                    final_text=self._stream(lane,job,thread_id,{'threadId':thread_id,'effort':effort,'outputSchema':schema,
-                        'input':[{'type':'text','text':retry_text},{'type':'localImage','path':str(photo)},{'type':'localImage','path':str(detail_photo)}]},started,state)
-                    decoded=json.loads(final_text)
-                    readings.append(deepcopy(decoded))
-                    job['metrics']['image_count']=len(images)
-                    job['metrics']['detail_image_bytes']=len(detail['image'])
-                    job['metrics']['total_image_bytes']+=len(detail['image'])
-            if fast:
-                # Reconcile both reads: a crop must not erase facts from the full view.
-                frame={'frame_id':job['frame_id'],'captured_at':job['captured_at'],'image':task['memory_image']}
-                read_request=deepcopy(inspection_request)
-                read_history=inspection_history
-                read_knowledge=inspection_knowledge
-                for index, reading in enumerate(readings):
-                    read_result=expand_response(reading,steps)
-                    reading_outcome=reconcile_inspection(
-                        read_result,read_request,read_knowledge,read_history,frame,time.time(),
-                        detail if index==len(readings)-1 else None,previous,dedicated=True,hint=inspection_hint)
-                    _, read_request, read_knowledge, read_history, read_state=reading_outcome
-                    if not read_request:break
-                job['metrics']['inspection_readings']=readings
-                new_fields={f['field'] for f in read_state['findings']}-set(inspection_request.get('acquired', {}))
-                if (read_request and not new_fields and frame['captured_at']>inspection_request['issued_at']) or read_state['status']=='abandoned':
-                    # One bounded escalation on this same frame, not four repeated requests to the user.
-                    recovery_request=read_request or {**inspection_request,'acquired':{f['field']:f for f in read_state['findings']}}
-                    inspection_history,recovery=release_inspection(recovery_request,read_history,frame)
-                    inspection_knowledge=read_knowledge
-                    inspection_request=None
-                    job['metrics']['inspection_recovery']=recovery
-                    self.event(job,'inspection.resume_diagnosis',missing=recovery['missing_information'])
-                    if job.get('cancelled'):raise InterruptedError('分析已取消')
-                    rpc.request('thread/archive',{'threadId':thread_id},timeout=3)
-                    prompt=PROMPT+('\n'+domain['prompt'] if domain else '')
-                    thread_params={'cwd':self.tmp.name,'ephemeral':True,'sandbox':'read-only','approvalPolicy':'never','developerInstructions':prompt}
-                    if CONFIG['lanes'].get('base_instructions'):thread_params['baseInstructions']=CONFIG['lanes']['base_instructions']
-                    if self.model:thread_params['model']=self.model
-                    response=rpc.request('thread/start',thread_params)
-                    thread_id=response['thread']['id'];actual_model=response.get('model',self.model);turns=0
-                    fast=False;lane_name='task';prompt_key=lane_name+':'+(domain['id'] if domain else '')
-                    # Use the available full-resolution view to reassess layout as well as detail.
-                    if task.get('hires'):photo.write_bytes(task['hires'])
-                    context={**task_context,'inspection_request':None,'inspection_recovery':recovery,
-                             'known_inspection_facts':inspection_knowledge,'recent_inspection_records':inspection_history[-M('inspection_context_records'):],
-                             'images_in_order':images}
-                    context_text=json.dumps(context,ensure_ascii=False)
-                    job['partial']=''
-                    job['metrics'].update(analysis_lane='task',thread_reused=False,reasoning_effort=self.reasoning_effort,
-                        context_chars=len(context_text),schema_chars=len(json.dumps(SCHEMA)),
-                        total_image_bytes=len(task.get('hires') or data)+(len(detail['image']) if detail else 0))
-                    final_text=self._stream(lane,job,thread_id,{'threadId':thread_id,'effort':self.reasoning_effort,'outputSchema':SCHEMA,
-                        'input':[{'type':'text','text':context_text},{'type':'localImage','path':str(photo)}]
-                        +([{'type':'localImage','path':str(detail_photo)}] if detail else [])},started,state)
-                    decoded=json.loads(final_text)
             job['metrics']['output_chars']=len(final_text)
-            result=reconcile_temporal(normalize(expand_response(decoded,steps) if fast else decoded,steps,previous),sent_reference)
+            result=reconcile_temporal(normalize(decoded,steps,previous),sent_reference)
             result=reconcile_diagnostics(reconcile_action(result,detail,plan,domain),detail,plan,domain)
             frame={'frame_id':job['frame_id'],'captured_at':job['captured_at'],'image':task['memory_image']}
             next_scene_memory=remember_scene(scene_memory,frame,result)
             inspecting=bool(inspection_request or inspection_candidate(result))
             if not inspecting:
                 result=reconcile_effect(result,expectation,reference,frame)
-            if fast:
-                # Commit the validated reads once; historical facts keep their original timestamps.
-                result,next_inspection,inspection_knowledge,inspection_history,inspection_state=reading_outcome
-            else:
-                result,next_inspection,inspection_knowledge,inspection_history,inspection_state=reconcile_inspection(
-                    result,inspection_request,inspection_knowledge,inspection_history,frame,time.time(),detail,previous,hint=inspection_hint)
+            result,next_inspection,inspection_knowledge,inspection_history,inspection_state=reconcile_inspection(
+                result,inspection_request,inspection_knowledge,inspection_history,frame,time.time(),detail,previous)
             effect_history=record_effect(effect_history,result,expectation,reference,frame)
             next_expectation=expectation if inspection_state else remember_expectation(expectation,result,frame,time.time())
             # A requested close-up is evidence for the information request, not a new
@@ -814,13 +747,13 @@ class Engine:
             usable=result['quality']=='good' and result['confidence']>=T('usable_confidence')
             with self.lock:
                 interaction=ask.decide(result['question'],result['guidance'],deepcopy(self._dialog(job['session'],False)),time.time(),
-                                       task['ask_level'],usable,'inspection' if inspection_state else 'task')
+                                       task['ask_level'],usable,'task')
             ask.apply(result,interaction)
             # Cues run last, after every rule that may have downgraded the guidance.
             result['visual_cues']=reconcile_cues(result['visual_cues'],result['guidance'],detail,usable)
             result['visual_cues']=ensure_move_cue(result['visual_cues'],result['guidance'],result['next_action'],usable)
             draft=guide_plan['plan'] if not prior_plan and guide_plan and guide_plan.get('signature')==signature else None
-            result['task_overview']=reconcile_overview(result['task_overview'],goal,steps,prior_plan or draft,lane='full',usable=usable and not fast,
+            result['task_overview']=reconcile_overview(result['task_overview'],goal,steps,prior_plan or draft,lane='full',usable=usable,
                                                        user_step_status=result['steps'] if steps else None,draft_prior=bool(draft))
             next_plan=plan_from_overview(result['task_overview']) or (None if steps else prior_plan)
             job['temporal_memory']={'decision':decision,'anchor_frame_id':anchor['frame_id'] if anchor else None}
@@ -830,7 +763,7 @@ class Engine:
                 job['pending_expectation']=public_expectation(next_expectation)
                 job.update(inspection_state=inspection_state,inspection_request=next_inspection,
                            inspection_knowledge=inspection_knowledge,inspection_history=inspection_history)
-                job['metrics']['guidance_owner']='inspection' if inspection_state else 'task'
+                job['metrics']['guidance_owner']='task'
                 dialog=self._dialog(job['session'])
                 ask.commit(dialog,interaction,job['frame_id'],time.time(),'full')
                 job['dialog']=ask.public(dialog)
@@ -856,7 +789,7 @@ class Engine:
         except Exception as exc:
             outcome=self._fail(lane,job,exc,thread_id,state)
         finally:
-            for path in (photo,reference_photo,expectation_photo,scene_photo,detail_photo,grid_photo):
+            for path in (photo,reference_photo,expectation_photo,scene_photo,detail_photo,grid_photo,history_photo):
                 path.unlink(missing_ok=True)
             self._finish(lane,job,outcome,started)
 
@@ -988,7 +921,7 @@ class Engine:
             thread_id=lane.rpc.request('thread/start',params)['thread']['id']
             context=read_context({'holes':task['holes'],'columns':task['columns'],'frame_id':job['frame_id'],'photo':True},task['known'],task)
             context_text=json.dumps(context,ensure_ascii=False)
-            effort=CONFIG['lanes'].get('inspection_reasoning_effort','low')
+            effort='low'
             job['brief_metrics'].update(context_chars=len(context_text),reasoning_effort=effort,image_count=2,warp_bytes=len(task['warp']))
             final=self._stream(lane,job,thread_id,{'threadId':thread_id,'effort':effort,'outputSchema':BOARD_READ_SCHEMA,
                                 'input':[{'type':'text','text':context_text},{'type':'localImage','path':str(warp)},{'type':'localImage','path':str(photo)}]},started,state)
@@ -1173,7 +1106,9 @@ class Engine:
             entry=ask.record(dialog,payload,time.time())
             memory=self.sessions[sid]
             if self.store:
-                self.store.save(sid,memory.get('task') or {'goal':'','steps':[],'plan':'','domain':'auto'},memory)
+                doc=self.store.detail(sid) or {}
+                task=memory.get('task') or doc.get('task') or {'goal':'','steps':[],'plan':'','domain':'auto'}
+                self.store.save(sid,task,memory)
             return {'entry':entry,'dialog':ask.public(dialog)}
 
     def delete_record(self, sid, record_id):
@@ -1275,11 +1210,13 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self.send(400,{'error':str(exc)});return
         if path=='/api/health':
-            proxy=urlparse(engine.proxy)
-            self.send(200,{'version':VERSION,'capabilities':['intent-guidance','temporal-action-memory','precise-actions','visual-diagnostics','action-effect-records','inspection-focus','task-scene-memory','fast-inspection','guide-lane','visual-cues','task-overview','session-store','domains','ask-gate','user-feedback','task-brief','auto-zoom','local-guide','board-circuit','board-read'],
+            from network_route import resolve_route
+            route=getattr(engine.rpc,'route',None) or resolve_route(engine.proxy)
+            self.send(200,{'version':VERSION,'capabilities':['intent-guidance','temporal-action-memory','precise-actions','visual-diagnostics','action-effect-records','inspection-focus','task-scene-memory','guide-lane','visual-cues','task-overview','session-store','domains','ask-gate','user-feedback','task-brief','local-guide','board-circuit','board-read'],
                            'transport':'sse','input':'latest-frame','cli_available':bool(shutil.which(engine.cli)),'model':engine.model or 'Codex 配置模型','timeout':engine.timeout,'busy':bool(engine.active),
                            'lanes':list(engine.lanes),'guide_backend':engine.guide_backend,'persistent_sessions':bool(engine.store),'config':public_config(),
-                           'proxy':f'{proxy.scheme}://{proxy.hostname}:{proxy.port}' if engine.proxy else 'system/VPN'})
+                           'proxy':route['label'],'network_mode':engine.proxy if engine.proxy in ('','auto') else 'manual',
+                           'model_transport_requested':CONFIG['codex'].get('transport','auto')})
         elif path=='/api/breadboard/profiles':
             profiles={p.stem:json.loads(p.read_text()) for p in (ROOT/'breadboards').glob('*.json')}
             try:
@@ -1403,21 +1340,19 @@ def main():
     parser.add_argument('--codex',default=os.environ.get('CODEX_BIN','codex'))
     parser.add_argument('--timeout',type=int,default=120)
     parser.add_argument('--reasoning-effort',choices=('low','medium','high'),default=os.environ.get('AGENTXR_REASONING_EFFORT',settings.get('reasoning_effort','low')))
-    parser.add_argument('--full-inspection',action='store_true',help='Use the full observer for information checks as well')
     parser.add_argument('--no-guide-lane',action='store_true',help='Disable the quick guidance lane (single full lane only)')
     parser.add_argument('--guide-backend',choices=('ollama','codex'),default=None,help='Quick lane model: local Qwen via Ollama, or Codex')
     parser.add_argument('--no-store',action='store_true',help='Keep session memory in RAM only')
     parser.add_argument('--proxy',default=os.environ.get('AGENTXR_PROXY',settings.get('proxy','')))
     args=parser.parse_args()
     if args.timeout<1 or not 1<=args.port<=65535:parser.error('timeout 或 port 无效')
-    if args.proxy:
+    if args.proxy and args.proxy!='auto':
         proxy=urlparse(args.proxy)
         if proxy.scheme not in ('http','https','socks5','socks5h') or not proxy.hostname:parser.error('代理 URL 无效')
     try:server=ThreadingHTTPServer(('127.0.0.1',args.port),Handler)
     except OSError as exc:parser.exit(1,f'无法启动 localhost:{args.port}: {exc}\n请停止旧服务后在 Mac 终端运行 start.command。\n')
     store=None if args.no_store else SessionStore(storage_dir(),CONFIG['storage']['persist_images'])
     server.engine=Engine(args.codex,args.model,args.timeout,args.reasoning_effort,args.proxy,
-                         fast_inspection=not args.full_inspection and settings.get('fast_inspection',True),
                          guide_lane=not args.no_guide_lane and CONFIG['lanes']['guide'],store=store,guide_backend=args.guide_backend)
     print(f'AgentXR {VERSION} → http://localhost:{args.port} · SSE / latest-frame · lanes: {", ".join(server.engine.lanes)}'
           + (f' · memory: {storage_dir()}' if store else ' · memory: RAM only'),flush=True)

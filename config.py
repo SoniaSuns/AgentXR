@@ -26,12 +26,11 @@ DEFAULTS = {
         'inspection_records': 40,
         'inspection_max_attempts': 4,          # frames without progress before an information request is paused
         'inspection_retry_cooldown_seconds': 60,
-        'inspection_region_seconds': 20,       # a remembered target box is reused for zooming this long
         'inspection_context_records': 3,
         'guide_context_facts': 8,
         'sessions_in_ram': 32,
         'jobs_in_ram': 40,
-        'saved_records': 24,
+        'saved_records': 0,  # 0 keeps saved photos until explicitly deleted.
     },
     'threads': {
         'full_max_turns': 8,   # rotate the full-analysis thread to bound image context
@@ -56,13 +55,13 @@ DEFAULTS = {
         'guide_local_max_tokens': 600,
         'guide_reasoning_effort': 'low',
         'brief_reasoning_effort': 'low',
-        'inspection_reasoning_effort': 'low',
         # Replace Codex's built-in coding-agent system prompt (large, irrelevant to images)
         # with this short one. Set to null to keep Codex's default.
         'base_instructions': '你是图像观察与操作引导助手。只根据附带图片和上下文 JSON 回答，严格按要求的 JSON schema 输出，不调用任何工具。',
     },
     # Codex features that only add tool definitions (input tokens) to an image-only observer.
     'codex': {
+        'transport': 'http',  # Requested transport; verify effective transport in CLI logs.
         'disable_features': ['apps','browser_use','browser_use_external','computer_use','image_generation','multi_agent',
                              'plugins','remote_plugin','skill_search','sleep_tool','tool_suggest','unified_exec','view_image',
                              'goals','in_app_browser','code_mode_host','realtime_conversation'],

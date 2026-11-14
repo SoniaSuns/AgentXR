@@ -135,7 +135,9 @@ class SessionStore:
                 else:
                     doc['records'].append(record)
                 from config import M
-                doc['records'] = doc['records'][-M('saved_records'):]
+                limit = M('saved_records')
+                if limit > 0:
+                    doc['records'] = doc['records'][-limit:]
             self._gc_images(sid, doc)
             self._write(sid, doc)
             return doc
@@ -208,6 +210,22 @@ class SessionStore:
             self._gc_images(sid, doc)
             self._write(sid, doc)
             return len(doc['records']) != before
+
+    def historical_photo(self, sid, record_id, captured_at):
+        """Load one explicitly selected photo from this session, without an age cutoff."""
+        with self.lock:
+            doc = self._read(sid) or {}
+            record = next((r for r in doc.get('records', []) if r['id'] == record_id), None)
+            if not record:
+                raise ValueError('所选历史照片不存在或已删除')
+            if record['captured_at'] > captured_at:
+                raise ValueError('历史照片不能晚于当前照片')
+            path = self.image_path(sid, record.get('image_file'))
+            if not path:
+                raise ValueError('所选历史照片未保存图片或图片已删除')
+            return {'record_id':record_id,'frame_id':record['frame_id'],
+                    'captured_at':record['captured_at'],'historical_only':True,
+                    'age_seconds':round(captured_at-record['captured_at'],2),'image':path.read_bytes()}
 
     def image_path(self, sid, name):
         if not IMAGE.fullmatch(name or ''):

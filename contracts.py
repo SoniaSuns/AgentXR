@@ -210,5 +210,9 @@ def prepare(payload):
         board = process(hires or data, payload['board'])
         if not board['ok']:
             raise ValueError('板面标定未通过：'+'；'.join(board['reasons']))
+    history_id = payload.get('history_record_id')
+    if history_id is not None and (not isinstance(history_id,str) or not re.fullmatch(r'[a-zA-Z0-9-]{8,80}',history_id)):
+        raise ValueError('历史照片记录编号无效')
     return {'session': session, 'goal': goal, 'steps': steps, 'data': data, 'memory_image': memory_image,
-            'plan': plan, 'detail': detail, 'domain': domain, 'ask_level': ask_level, 'hires': hires, 'board': board}
+            'plan': plan, 'detail': detail, 'domain': domain, 'ask_level': ask_level, 'hires': hires, 'board': board,
+            'history_record_id':history_id}

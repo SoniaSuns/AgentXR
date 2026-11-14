@@ -3,7 +3,6 @@
 
   --lane guide       quick guidance lane (runs alongside the full lane, as in the app)
   --lane full        full audit lane only
-  --lane inspection  fast information reading (needs --target/--field)
 """
 import argparse
 import base64
@@ -17,7 +16,6 @@ import time
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from config import configure
 from server import Engine, ROOT
-from fast_inspection import expand_response
 
 KEYS=('first_delta_ms','latency_ms','capture_to_result_ms','context_chars','schema_chars','output_chars','image_count','tokens','reasoning_effort','thread_reused')
 
@@ -25,34 +23,24 @@ KEYS=('first_delta_ms','latency_ms','capture_to_result_ms','context_chars','sche
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('photo',type=Path)
-    parser.add_argument('--lane',choices=['guide','full','inspection'],default='guide')
+    parser.add_argument('--lane',choices=['guide','full'],default='full')
     parser.add_argument('--goal',default='')
-    parser.add_argument('--target')
-    parser.add_argument('--field',action='append')
     parser.add_argument('--runs',type=int,default=3)
     parser.add_argument('--reasoning-effort',choices=['low','medium','high'],default='low')
     parser.add_argument('--output',type=Path)
     args=parser.parse_args()
     if not 1<=args.runs<=10:parser.error('runs: 1–10')
-    if args.lane=='inspection' and (not args.target or not args.field or len(args.field)>4):parser.error('inspection 需要 --target 和 1–4 个 --field')
     settings=json.loads((ROOT/'settings.json').read_text())
     configure(settings)
     photo=args.photo.read_bytes()
     image='data:image/jpeg;base64,'+base64.b64encode(photo).decode()
     session='latency-benchmark'
     engine=Engine(os.environ.get('CODEX_BIN','codex'),os.environ.get('AGENTXR_MODEL',''),reasoning_effort=args.reasoning_effort,
-                  proxy=settings.get('proxy',''),fast_inspection=args.lane=='inspection',guide_lane=args.lane=='guide')
-    goal=args.goal or ('读取指定对象的信息：'+args.target if args.lane=='inspection' else '')
+                  proxy=settings.get('proxy',''),guide_lane=args.lane=='guide')
+    goal=args.goal
     measurements=[]
     try:
         for i in range(args.runs):
-            if args.lane=='inspection':
-                request={'id':'benchmark-reading','target':args.target,'question':'读取：'+'、'.join(args.field),
-                         'required_information':args.field,'frame_id':'benchmark-before','issued_at':time.time()-.01,'acquired':{}}
-                empty={'request_id':'','target':'','quality':'unknown','status':'none','confidence':0,'findings':[],'regions':[]}
-                with engine.lock:
-                    prior=engine.sessions.setdefault(session,{'signature':json.dumps([goal,[],''],ensure_ascii=False),'result':expand_response(empty,[]),'generation':-1})
-                    prior['inspection_request']=request
             key=engine.submit({'session':session,'frame_id':f'benchmark-{i}-{int(time.time()*1000)}','goal':goal,'steps':[],
                                'captured_at':time.time()*1000,'image':image})
             lane='guide' if args.lane=='guide' else 'full'

@@ -30,39 +30,19 @@ def produce(p,turn):
         result['next_action'].update(status='need_detail',targets=[])
         if context['frame_id']=='battery-request':
             result['inspection']['proposal'].update(target='电池',question='电池标称电压和极性标记是什么',required_information=['标称电压','极性标记'])
-        elif not context.get('inspection_recovery'):
+        else:
             result.update(quality='occluded',confidence=.3,scene_scope='detail')
             request=context['inspection_request']
             result['inspection']['response'].update(request_id=request['id'],target=request['target'],quality='good',confidence=.95,status='answered',findings=[{'field':'标称电压','value':'1.5 V','evidence':'标签印有 1.5 V'}] if context['frame_id']=='battery-partial' else [{'field':'极性标记','value':'可见 +','evidence':'顶部旁有 +'}])
-            if context['frame_id'].startswith('battery-zoom'):
-                # Realistic model output: paraphrased field names, no echoed request id.
-                zoomed=any(i['role']=='current_detail' for i in context['images_in_order'])
-                result['inspection']['response'].update(request_id='',target='电池盒',quality='good' if zoomed else 'occluded',
-                    status='answered' if zoomed else 'missing',confidence=.9,
-                    findings=[{'field':'电池标称电压','value':'1.5 V','evidence':'放大后标签可读'},{'field':'极性','value':'上端 +','evidence':'放大后可见 +'}] if zoomed else [],
-                    regions=[] if zoomed else [{'role':'object','label':'电池','coordinate_space':'full_frame','x':.5,'y':.4,'width':.3,'height':.3,'confidence':.9}])
-    if context.get('frame_id','').startswith('battery-stalled') and not context.get('inspection_recovery'):
+    if context.get('frame_id','').startswith('battery-stalled'):
         result['inspection']['response'].update(quality='occluded',status='missing',confidence=.92,findings=[],
             regions=[{'role':'object','label':'电池','coordinate_space':'full_frame','x':.5,'y':.4,'width':.3,'height':.3,'confidence':.9}])
-    if context.get('frame_id')=='battery-zoom-split':
-        zoomed=any(i['role']=='current_detail' for i in context['images_in_order'])
-        result['inspection']['response'].update(quality='good',status='partial',confidence=.95,
-            findings=[{'field':'极性标记','value':'可见 +','evidence':'局部可见 +'}] if zoomed else [{'field':'标称电压','value':'1.5 V','evidence':'全景标签可读'}],
-            regions=[] if zoomed else [{'role':'object','label':'电池','coordinate_space':'full_frame','x':.5,'y':.4,'width':.3,'height':.3,'confidence':.9}])
-    if context.get('inspection_recovery'):
-        result['quality']='good';result['confidence']=.9;result['scene_scope']='task_view'
-        result['guidance'].update(mode='observe',title='核对其他连接',instruction='检查可见连接是否连续',check='确认连接关系')
-        result['diagnostics']['check'].update(instruction='检查可见连接是否连续',expected_result='确认连接关系')
-        # Even a repeated proposal must not reacquire the instruction lock.
-        result['inspection']['proposal'].update(target='电池',question='电池标称电压和极性标记是什么',required_information=['标称电压','极性标记'])
     if MODE=='mismatch':result['steps'][0]['title']='wrong'
     if MODE=='timeout':
         notify('error',{**base,'error':{'message':'request timed out'},'willRetry':True})
         time.sleep(5);return
     # Intentionally send a reasoning notification; observer must never forward it.
     notify('item/reasoning/textDelta',{**base,'delta':'PRIVATE_REASONING_FIXTURE'})
-    if 'request_id' in p['outputSchema']['properties']:
-        result=result['inspection']['response']
     if 'requirements' in p['outputSchema']['properties']:
         # Text-only task understanding.
         steps=context.get('user_steps') or ['取出 LED 和电阻','插入面包板','接通电源']
@@ -129,4 +109,6 @@ for line in sys.stdin:
     elif method=='turn/interrupt':
         cancel.set();respond(request['id'],{})
         notify('turn/completed',{'threadId':params['threadId'],'turn':{'id':params['turnId'],'status':'interrupted'}})
-    elif method=='thread/archive':respond(request['id'],{})
+    elif method=='thread/archive':
+        # All fixture threads are ephemeral, just like the observer's real threads.
+        emit({'id':request['id'],'error':{'code':-32600,'message':f"no rollout found for thread id {params['threadId']}"}})

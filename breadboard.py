@@ -128,7 +128,7 @@ def rectify(data, request):
     if not isinstance(request,dict):raise ValueError('板面配置无效')
     spec=request.get('profile');holes,_=profile(spec)
     if request.get('layout_confirmed') is not True:raise ValueError('先确认板型、编号方向与中缝/电源轨分段')
-    from crop import jpeg_size
+    from image_metadata import jpeg_size
     dimensions=jpeg_size(data)
     if not dimensions or dimensions[0]*dimensions[1]>20_000_000:raise ValueError('JPEG 尺寸无效或过大')
     picture=cv.imdecode(np.frombuffer(data,np.uint8),cv.IMREAD_COLOR)

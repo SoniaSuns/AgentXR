@@ -1,8 +1,7 @@
 """Optional domain plug-ins. Core prompts and code stay task-agnostic.
 
 A plug-in is a JSON file in domains/ with: id, label, keywords, prompt, guide_prompt,
-and optionally fine_position_hint, modify_preconditions, presets, inspection_prompt (rules
-for the dedicated reading turn) and inspection_hint (how to re-aim the camera when a reading fails). Users can add files
+and optionally fine_position_hint, modify_preconditions and presets. Users can add files
 without touching code; 'auto' matches keywords declared in those files.
 """
 import json
@@ -23,8 +22,6 @@ def load_domains(directory=DOMAIN_DIR):
             continue
         data.setdefault('keywords', [])
         data.setdefault('guide_prompt', '')
-        data.setdefault('inspection_prompt', '')
-        data.setdefault('inspection_hint', '')
         data.setdefault('modify_preconditions', [])
         data.setdefault('presets', [])
         domains[data['id']] = data

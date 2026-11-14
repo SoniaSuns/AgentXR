@@ -57,14 +57,24 @@ def reconcile_diagnostics(result, detail=None, plan='', domain=None):
     if result['phase']=='complete':result['phase']='verify'
     check=d['check'];action=result['next_action']
     safety=list((domain or {}).get('modify_preconditions',[]))
-    if check['kind']=='modify' and (not plan.strip() or action['status']!='ready' or not any(t['label'] in check['target_labels'] for t in action['targets'])):
+    if check['kind']=='modify' and (not usable or action['status']!='ready' or not any(t['label'] in check['target_labels'] for t in action['targets'])):
         prefix=('先'+ '；'.join(safety)+'。' ) if safety else '先不要改动。'
-        check={'kind':'observe','instruction':prefix+'拍清需要修改的部位及其连接/位置关系，并在操作说明中补充目标位置。','expected_result':'明确需要更改的位置，避免猜测','preconditions':safety,'target_labels':[]}
+        check={'kind':'observe','instruction':prefix+'请拍清要移动的对象和目标位置。','expected_result':'对象与目标位置清晰可见','preconditions':safety,'target_labels':[]}
         d['check']=check
     elif check['kind']=='modify':
-        for item in reversed(safety):
-            if item not in check['preconditions']:
-                check['preconditions'].insert(0,item)
+        # The validated action owns its object/destination pair. Filtering it by the
+        # diagnostic region labels used to erase one end and therefore the arrow.
+        action['preconditions']=list(dict.fromkeys(safety+action['preconditions']+check['preconditions']))
+        check.update(instruction=action['instruction'],expected_result=action['expected_result'],
+                     preconditions=action['preconditions'],target_labels=[t['label'] for t in action['targets']])
+        instruction=action['instruction']
+        if safety and not any(word in instruction for word in ('断电','断开电源')):
+            instruction='先'+ '；'.join(safety)+'。'+instruction
+        action['instruction']=instruction
+        check['instruction']=instruction
+        result['guidance']={'mode':'act','title':action['verb']+' '+action['object'],
+                            'instruction':instruction,'check':action['expected_result']}
+        return result
     # Highlight inspection regions separately; do not pretend an uncertain cause is a confirmed operation.
     action['targets']=[t for t in action['targets'] if t['label'] in check['target_labels']]
     action.update(status='ready' if action['targets'] else 'need_context',verb='排查',object=d['expected'] or '与预期不符的状态',instruction=check['instruction'],expected_result=check['expected_result'],preconditions=check['preconditions'],location_label='',missing_information=[])

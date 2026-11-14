@@ -1,181 +1,96 @@
 {
  "files": {
-  "README.md": "b145da15700ba896",
-  "actions.py": "307d0758f6b7b998",
+  "README.md": "0876caadd7ce829e",
+  "actions.py": "8c2a34d7964785d1",
   "ask.py": "b5221530a5f264af",
   "board_reader.py": "ff950a1b7be3d91d",
-  "breadboard.py": "4763de2712a2d43b",
+  "breadboard.py": "68f76a9d0cd8d25c",
   "brief.py": "5693af04e87e1f1c",
   "circuit.py": "6f147df0f2c8a3ae",
-  "codex_rpc.py": "279306f2f31abfac",
-  "config.py": "76c1ebad2537fae4",
-  "contracts.py": "5aece31b12d1968c",
-  "crop.py": "87091f325a8c707c",
-  "diagnostics.py": "a9cec9f35dd2ef24",
-  "docs/ARCHITECTURE.template.md": "0f91c5210b751b8d",
-  "domains/electronics.json": "e98fb68857c293dc",
-  "domains.py": "8190ea1cdbad2103",
-  "effects.py": "ff9d6881c8350e14",
-  "fast_inspection.py": "afe4e12120674519",
-  "guide.py": "3e51b5e7e9e4e1f7",
-  "inspection.py": "3e9702ce603be628",
+  "codex_rpc.py": "772b7b72ab29002c",
+  "config.py": "d6cfbb464844289a",
+  "contracts.py": "37faa938e26f5d76",
+  "diagnostics.py": "36a221efba544c28",
+  "docs/ARCHITECTURE.template.md": "debdb6e25d100cb4",
+  "domains/electronics.json": "6a117550553edf9c",
+  "domains.py": "47c7757218d43106",
+  "effects.py": "aa220ad41bf57ea7",
+  "guide.py": "30fe6c1c85f5228f",
+  "image_metadata.py": "3223a59aac457fe4",
+  "inspection.py": "f12744a937c6bbe5",
   "local_vlm.py": "f497935810acd8d8",
-  "observer_prompt.txt": "0474daa45ea4faed",
+  "network_route.py": "2d2b7d18cac8d483",
+  "observer_prompt.txt": "7c9637febbf34ca3",
   "requirements-vision.txt": "4f499c593cc13d02",
-  "scene_memory.py": "69215fa48d9beb27",
-  "scripts/benchmark_latency.py": "b755ad3e59f3fe47",
+  "scene_memory.py": "e37c49d9e36c4283",
+  "scripts/benchmark_latency.py": "e2a840dfe257832d",
   "scripts/make_board_markers.py": "474a308f5a392e0b",
   "scripts/smoke_cli.py": "6a6fbc76d32069f0",
-  "scripts/update_docs.py": "48a6afa99cb5d9ed",
-  "server.py": "c72b12730a8a55af",
-  "settings.json": "e298403f93d42285",
-  "start.command": "19e892ba70f5ba0b",
-  "store.py": "17f335df1615d9e5",
-  "temporal.py": "7773422c4e737784",
-  "tests/fake_app_server.py": "7326fd5df624295f",
+  "scripts/update_docs.py": "c425304a1c2d54fa",
+  "server.py": "5ecfbe10bd2fd928",
+  "settings.json": "848326bead6f33ca",
+  "start.command": "60dd3efa82545481",
+  "store.py": "d937710373900d9e",
+  "temporal.py": "75725fecfe88d709",
+  "tests/fake_app_server.py": "37c8b894a11620f5",
   "tests/test_ask.py": "3bda0e2362c14d78",
-  "tests/test_board_frontend.cjs": "c7b946c58d422621",
+  "tests/test_board_frontend.cjs": "05d6636e0f9901b7",
   "tests/test_board_reader.py": "7ad70150228e1b76",
   "tests/test_breadboard.py": "2bf45e6e9eebb2b1",
+  "tests/test_capture_flow.cjs": "149d1b5cd34d81d7",
   "tests/test_circuit.py": "7d9fe91c8a1c0e7a",
-  "tests/test_effects.py": "c0b48b842102bbdf",
-  "tests/test_fast_inspection.py": "6124e36100d226ab",
-  "tests/test_frontend.cjs": "32c93791ea3a9db0",
-  "tests/test_inspection.py": "522f4ab246042b02",
-  "tests/test_lanes.py": "0fa5ba90dc0dc966",
+  "tests/test_direct_guidance.py": "38a07433fa68995b",
+  "tests/test_effects.py": "32a3125767282482",
+  "tests/test_frontend.cjs": "3a9468973883ed90",
+  "tests/test_inspection.py": "3f2985a92b2ccd99",
+  "tests/test_lanes.py": "bbabe3243433331e",
+  "tests/test_network_route.py": "a92efcdb330b2d98",
+  "tests/test_photo_history.py": "657b3ec74f31f366",
+  "tests/test_photo_viewer.cjs": "32780ba106b30e7f",
   "tests/test_scene_memory.py": "eb2562ec39c7cfbc",
-  "tests/test_server.py": "a6545fde306bda79",
+  "tests/test_server.py": "ba41f27c386f5449",
   "tests/test_visual.py": "02ed726853e3fff4",
   "visual.py": "5aabab425604b15b",
-  "web/app.js": "894f27b960a353c8",
+  "web/app.js": "715b0ee9ca935b39",
   "web/board.js": "0365ecf75ff86a3c",
-  "web/cues.js": "0e98ce668daeb890",
-  "web/index.html": "f262dfa86c358eb2",
-  "web/style.css": "881aab10a987952b"
+  "web/cues.js": "a4c42f7b8f302f7e",
+  "web/index.html": "93110025d992ceca",
+  "web/style.css": "387446a0f240e024"
  },
  "log": [
   {
-   "time": "2026-11-13 13:47:13",
+   "time": "2026-11-14 00:57:23",
    "added": [
-    "circuit.py"
+    "network_route.py"
+   ],
+   "changed": [
+    "codex_rpc.py",
+    "config.py",
+    "server.py",
+    "settings.json",
+    "start.command",
+    "web/app.js"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 00:58:27",
+   "added": [
+    "tests/test_network_route.py"
    ],
    "changed": [],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:47:49",
+   "time": "2026-11-14 00:59:07",
    "added": [],
    "changed": [
-    "breadboard.py"
+    "README.md"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:47:49",
-   "added": [
-    "tests/test_circuit.py"
-   ],
-   "changed": [],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:48:09",
-   "added": [],
-   "changed": [
-    "circuit.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:48:09",
-   "added": [],
-   "changed": [
-    "circuit.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:48:20",
-   "added": [],
-   "changed": [
-    "tests/test_circuit.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:48:36",
-   "added": [],
-   "changed": [
-    "circuit.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:48:36",
-   "added": [],
-   "changed": [
-    "tests/test_circuit.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:49:07",
-   "added": [],
-   "changed": [
-    "breadboard.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:50:53",
-   "added": [
-    "board_reader.py"
-   ],
-   "changed": [],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:50:53",
-   "added": [],
-   "changed": [
-    "server.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:50:54",
-   "added": [],
-   "changed": [
-    "server.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:50:54",
-   "added": [],
-   "changed": [
-    "server.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:50:54",
-   "added": [],
-   "changed": [
-    "server.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:50:54",
-   "added": [],
-   "changed": [
-    "server.py"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:50:54",
+   "time": "2026-11-14 16:07:57",
    "added": [],
    "changed": [
     "tests/fake_app_server.py"
@@ -183,114 +98,262 @@
    "removed": []
   },
   {
-   "time": "2026-11-13 13:51:20",
-   "added": [
-    "tests/test_board_reader.py"
-   ],
-   "changed": [],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:51:34",
+   "time": "2026-11-14 16:08:31",
    "added": [],
    "changed": [
-    "board_reader.py"
+    "server.py",
+    "tests/test_lanes.py"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:51:34",
+   "time": "2026-11-14 16:10:16",
    "added": [],
    "changed": [
-    "board_reader.py"
+    "README.md",
+    "codex_rpc.py",
+    "config.py",
+    "server.py"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:53:46",
+   "time": "2026-11-14 16:14:13",
    "added": [],
    "changed": [
-    "web/board.js"
+    "config.py",
+    "contracts.py",
+    "server.py",
+    "store.py"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:53:46",
+   "time": "2026-11-14 16:14:45",
    "added": [],
    "changed": [
-    "web/index.html"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:53:46",
-   "added": [],
-   "changed": [
-    "web/index.html"
-   ],
-   "removed": []
-  },
-  {
-   "time": "2026-11-13 13:53:47",
-   "added": [],
-   "changed": [
+    "observer_prompt.txt",
     "web/app.js"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:53:47",
-   "added": [],
+   "time": "2026-11-14 16:15:13",
+   "added": [
+    "tests/test_photo_history.py"
+   ],
    "changed": [
-    "web/style.css"
+    "tests/test_lanes.py"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:53:47",
+   "time": "2026-11-14 16:15:38",
    "added": [],
    "changed": [
+    "tests/test_lanes.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:16:36",
+   "added": [],
+   "changed": [
+    "tests/test_capture_flow.cjs"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:16:46",
+   "added": [],
+   "changed": [
+    "README.md"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:25:52",
+   "added": [
+    "image_metadata.py"
+   ],
+   "changed": [
+    "breadboard.py",
+    "scripts/benchmark_latency.py",
+    "scripts/update_docs.py",
+    "server.py",
+    "settings.json"
+   ],
+   "removed": [
+    "crop.py",
+    "fast_inspection.py",
+    "tests/test_fast_inspection.py"
+   ]
+  },
+  {
+   "time": "2026-11-14 16:26:31",
+   "added": [],
+   "changed": [
+    "actions.py",
+    "inspection.py",
     "observer_prompt.txt"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:53:47",
+   "time": "2026-11-14 16:27:11",
    "added": [],
    "changed": [
-    "start.command"
+    "domains/electronics.json",
+    "observer_prompt.txt",
+    "tests/test_lanes.py",
+    "tests/test_server.py",
+    "web/app.js"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:54:06",
+   "time": "2026-11-14 16:27:55",
    "added": [],
    "changed": [
-    "tests/test_frontend.cjs"
+    "config.py",
+    "docs/ARCHITECTURE.template.md",
+    "domains/electronics.json",
+    "guide.py",
+    "settings.json",
+    "tests/test_inspection.py"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:58:08",
+   "time": "2026-11-14 16:28:43",
    "added": [],
    "changed": [
-    "README.md"
+    "docs/ARCHITECTURE.template.md",
+    "domains.py",
+    "server.py",
+    "tests/fake_app_server.py"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 13:58:08",
+   "time": "2026-11-14 16:32:28",
    "added": [],
    "changed": [
-    "docs/ARCHITECTURE.template.md"
+    "README.md",
+    "scripts/update_docs.py",
+    "tests/test_board_frontend.cjs",
+    "tests/test_frontend.cjs",
+    "web/app.js"
    ],
    "removed": []
   },
   {
-   "time": "2026-11-13 14:25:35",
+   "time": "2026-11-14 16:32:47",
    "added": [],
    "changed": [
-    "README.md"
+    "tests/test_board_frontend.cjs"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:44:09",
+   "added": [],
+   "changed": [
+    "actions.py",
+    "diagnostics.py",
+    "guide.py",
+    "observer_prompt.txt"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:44:36",
+   "added": [],
+   "changed": [
+    "domains/electronics.json",
+    "effects.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:45:08",
+   "added": [],
+   "changed": [
+    "web/app.js",
+    "web/index.html"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:45:50",
+   "added": [],
+   "changed": [
+    "web/app.js",
+    "web/style.css"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:46:45",
+   "added": [
+    "tests/test_direct_guidance.py"
+   ],
+   "changed": [
+    "tests/test_effects.py",
+    "tests/test_server.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:47:21",
+   "added": [
+    "tests/test_photo_viewer.cjs"
+   ],
+   "changed": [],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:48:40",
+   "added": [],
+   "changed": [
+    "README.md",
+    "docs/ARCHITECTURE.template.md",
+    "guide.py",
+    "observer_prompt.txt"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 16:49:33",
+   "added": [],
+   "changed": [
+    "actions.py"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 17:41:21",
+   "added": [],
+   "changed": [
+    "web/app.js",
+    "web/cues.js",
+    "web/style.css"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 17:41:39",
+   "added": [],
+   "changed": [
+    "tests/test_photo_viewer.cjs"
+   ],
+   "removed": []
+  },
+  {
+   "time": "2026-11-14 19:27:03",
+   "added": [],
+   "changed": [
+    "image_metadata.py"
    ],
    "removed": []
   }

@@ -14,7 +14,7 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 print 'AgentXR 0.14 面包板孔格标定 + Codex 读端点 + 确定性回路判断：http://localhost:8765'
-print '代理读取 settings.json（也可用 AGENTXR_PROXY 覆盖）；空值使用系统网络，请保持 Surfshark 已连接。'
+print '网络读取 settings.json（可用 AGENTXR_PROXY 覆盖）；auto 自动检测系统代理及 0dcloud，未发现可用代理端口时使用系统 VPN/TUN 路由。'
 print '保持此终端窗口开启；按 Control+C 停止。'
 (sleep 2; open 'http://localhost:8765') &
 # Keep ARCHITECTURE.md in sync with any edit made while the server runs (editor, Codex, Claude Code).

@@ -24,12 +24,12 @@ GUIDE_PROMPT = '''你是实时操作引导器。只看附带的当前照片（cu
 guidance：给用户现在要做的一小步。能按最可能的理解安全给出时 mode=act，title 用"动词+对象"，instruction 一句话，check 写可见的验收结果；画面看不清 mode=observe 并说明怎么调整取景；只有完全无法给出任何安全的下一步时才 mode=confirm。
 {ASK_PROMPT}
 
-上下文 authority 来自后台完整分析：若有 inspection_request，就继续请用户展示该对象的缺失信息；若有 pending_expectation 且当前画面未显示其完成，继续指导完成或展示该动作结果，不要跳到后面的步骤；若有 diagnostic_check，与其保持一致。authority 中的内容是历史判断，当前画面明显已变化时以当前画面为准。
+上下文 authority 来自后台完整分析：inspection_request 只是未决信息，不能遮蔽当前图中其他有依据的问题；若有 pending_expectation 且当前画面未显示其完成，继续指导完成或展示该动作结果，不要跳到后面的步骤；若有 diagnostic_check，与其保持一致。authority 中的内容是历史判断，当前画面明显已变化时以当前画面为准。
 task_brief（若有）是开拍前对用户任务文本的解析：requirements 里的位置、数值、方向、禁止事项必须遵守并写进 instruction；steps[].check 是每步的验收标准，可用于 check；safety 未满足时先指导满足它。
 task_overview：user_goal / user_steps 非空时原样使用；否则沿用 current_plan 的目标与步骤标题，只更新 current_step_index（从 0 开始，未知 -1）和步骤状态；尚无计划时推断目标和 3–8 个粗粒度步骤。你不能把步骤标为 done（由后台核验）。plan_revision_reason 填空字符串。
 visual_cues：只在 mode=act 时给，最多 3 个，坐标 0–1、对应当前全景（或 detail_crop）：arrow/insert/pull 从 (x1,y1) 指向 (x2,y2)；rotate 以 (x1,y1) 为中心、radius 半径、direction cw/ccw、turns；press 在 (x1,y1)；cut 沿 (x1,y1)→(x2,y2)；tool_ghost 用 tool 从 (x1,y1) 移到 (x2,y2)。端点必须在可见物体上；不确定就 []。不用的字段填 0、none。
 targets：最多 4 个当前可见的相关对象/目标位置框，x/y 为左上角，不越界。
-precision=fine_position 表示精确孔位/刻度/标号：没有 plan 要求与可读标记依据时不要给具体位置，改为 mode=confirm。
+precision=fine_position 表示精确孔位/刻度/标号：可读标记或明确的相对位置都可作为依据，不强制填写 plan。相对定位用 visual_location；移动动作同时给对象与目标框及箭头。关键位置看不清时才问一项。
 quality/confidence 是对当前画面的自评。不输出推理过程。
 以下 JSON 是上下文数据：'''.replace('{ASK_PROMPT}', ask.PROMPT)
 
@@ -76,26 +76,18 @@ def reconcile_guide(raw, task, memory, detail=None, domain=None, dialog=None, no
                         instruction='画面不足以给出操作：请改善光线、保持相机稳定并让操作区域完整入镜。',
                         check='操作对象与关键细节清晰可见')
     if guidance['mode'] == 'act' and guidance['precision'] == 'fine_position' and (
-            not task['plan'].strip() or guidance['location_basis'] not in ('visible_labels', 'provided_plan')):
+            guidance['location_basis'] not in ('visible_labels', 'provided_plan', 'visual_location') or
+            (guidance['location_basis']=='provided_plan' and not task['plan'].strip()) or
+            not any(t['role'] in ('destination','contact_point') for t in project_targets(g['targets'],detail))):
         guidance.update(mode='confirm', title='先确认精确位置',
                         instruction=(domain or {}).get('fine_position_hint') or GENERIC_FINE_POSITION_HINT,
-                        check='目标位置有可读标记或明确计划')
+                        check='目标位置清晰可定位')
     owner = 'guide'
-    request = (memory or {}).get('inspection_request')
-    if request:
-        # An outstanding information request owns the instruction, as in the full lane.
-        missing = [f for f in request['required_information'] if f not in request.get('acquired', {})]
-        guidance.update(mode='observe', title=f"继续查看{request['target']}",
-                        instruction=f"请让{request['target']}的「{'、'.join(missing or request['required_information'])}」清晰入镜。当前仍在回答：{request['question']}。",
-                        check='；'.join(missing or request['required_information']))
-        owner = 'inspection'
     g['targets'] = project_targets(g['targets'], detail) if usable else []
     # The gate runs before cues: a blocking question replaces the act instruction.
     ask.apply(g, ask.decide(g['question'], guidance, dialog, now, level, usable, owner))
     guidance = g['guidance']
     g['visual_cues'] = reconcile_cues(g['visual_cues'], guidance, detail, usable)
-    if owner == 'inspection':
-        g['targets'] = []
     prior_plan = (memory or {}).get('plan')
     user_status = None
     if task['steps'] and memory and memory.get('result') and [s['title'] for s in memory['result']['steps']] == task['steps']:
